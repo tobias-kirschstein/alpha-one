@@ -1,2 +1,3 @@
 # Ignore PyCharm's project settings
 .idea/
+**/*.ipynb_checkpoints/
