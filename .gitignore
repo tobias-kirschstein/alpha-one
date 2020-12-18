@@ -1,3 +1,5 @@
 # Ignore PyCharm's project settings
 .idea/
 **/*.ipynb_checkpoints/
+alpha_one.egg-info/
+**/__pycache__

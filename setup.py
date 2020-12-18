@@ -6,5 +6,5 @@ setup(name='alpha_one',
       author='Tobias Kirschstein',
       author_email='kirschto@in.tum.de',
       packages=['alpha_one'],
-      install_requires=['envyaml'],
+      install_requires=['envyaml', 'trueskill'],
       zip_safe=False)
