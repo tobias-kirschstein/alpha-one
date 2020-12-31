@@ -3,8 +3,19 @@ from abc import ABC, abstractmethod
 class RatingSystem(ABC):
     
     @abstractmethod
-    def calculate_ratings(self, match_outcomes):
+    def update_ratings(self, match_outcomes):
         pass
+
+    @abstractmethod
+    def get_rating(self, player_id):
+        pass
+
+    @abstractmethod
+    def get_players(self):
+        pass
+
+    def get_ratings(self):
+        return {player_id: self.get_rating(player_id) for player_id in self.get_players()}
 
 
 class MatchOutcome:
