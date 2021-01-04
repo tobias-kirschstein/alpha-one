@@ -1,0 +1,1 @@
+from .open_spiel import OpenSpielModelConfig

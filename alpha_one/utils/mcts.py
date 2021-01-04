@@ -2,6 +2,7 @@ import numpy as np
 
 from open_spiel.python.algorithms.alpha_zero import evaluator as evaluator_lib
 from open_spiel.python.algorithms import mcts
+from alpha_one.game.trajectory import GameTrajectory
 
 
 def initialize_bot(game, model, uct_c, max_simulations, policy_epsilon=None, policy_alpha=None):
@@ -39,3 +40,25 @@ def compute_mcts_policy(game, root, temperature):
         policy = policy ** (1 / temperature)
         policy /= policy.sum()
     return policy
+
+
+def play_one_game(game, bots, temperature, temperature_drop):
+    trajectory = GameTrajectory()
+    state = game.new_initial_state()
+    current_turn = 0
+    while not state.is_terminal():
+        root = bots[state.current_player()].mcts_search(state)
+
+        if current_turn < temperature_drop:
+            policy = compute_mcts_policy(game, root, temperature)
+        else:
+            policy = compute_mcts_policy(game, root, 0)
+
+        action = np.random.choice(len(policy), p=policy)
+
+        trajectory.append(state, action, policy)
+        state.apply_action(action)
+        current_turn += 1
+
+    trajectory.set_final_rewards(state.returns())
+    return trajectory

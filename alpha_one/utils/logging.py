@@ -44,3 +44,6 @@ class TensorboardLogger(MetricsLogger):
 
     def flush(self):
         self.writer.flush()
+
+    def log_hyperparameters(self, hyperparameters:dict):
+        self.writer.add_hparams(hyperparameters, dict())
