@@ -7,7 +7,8 @@ from open_spiel.python.algorithms.alpha_zero import model as model_lib
 
 from alpha_one.game.buffer import ReplayBuffer
 from alpha_one.metrics import MatchOutcome, EloRatingSystem, TrueSkillRatingSystem, calculate_entropy
-from alpha_one.model.model_manager import OpenSpielModelManager, OpenSpielModelConfig
+from alpha_one.model.model_manager import OpenSpielModelManager
+from alpha_one.model.config import OpenSpielModelConfig
 from alpha_one.utils.logging import TensorboardLogger, generate_run_name
 from alpha_one.utils.mcts import initialize_bot, play_one_game
 from env import MODEL_SAVES_DIR, LOGS_DIR
@@ -149,11 +150,12 @@ if __name__ == '__main__':
 
     # Setup model and game
     game = pyspiel.load_game(game_name)
-    model_manager = OpenSpielModelManager(
-        f"{game_name}/{run_name}",
-        OpenSpielModelConfig(game, model_type, nn_width, nn_depth, weight_decay, learning_rate))
 
-    model = model_manager.build_model()
+    model_config = OpenSpielModelConfig(game, model_type, nn_width, nn_depth, weight_decay, learning_rate)
+    model_manager = OpenSpielModelManager(f"{game_name}/{run_name}")
+    model_manager.store_config(model_config)
+    model = model_manager.build_model(model_config)
+    
     print("Num variables:", model.num_trainable_variables)
     model.print_trainable_variables()
     model_current_best = copy_and_create_checkpoint(0)
