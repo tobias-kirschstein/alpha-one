@@ -1,4 +1,7 @@
-class OpenSpielModelConfig(object):
+from .base import ModelConfig
+
+
+class OpenSpielModelConfig(ModelConfig):
 
     def __init__(self,
                  game,
@@ -7,9 +10,10 @@ class OpenSpielModelConfig(object):
                  nn_depth: int,
                  weight_decay: float,
                  learning_rate: float):
-        self.game = game
-        self.model_type = model_type
-        self.nn_width = nn_width
-        self.nn_depth = nn_depth
-        self.weight_decay = weight_decay
-        self.learning_rate = learning_rate
+        super(OpenSpielModelConfig, self).__init__(
+            game=game,
+            model_type=model_type,
+            nn_width=nn_width,
+            nn_depth=nn_depth,
+            weight_decay=weight_decay,
+            learning_rate=learning_rate)
