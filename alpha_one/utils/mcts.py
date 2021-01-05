@@ -62,3 +62,14 @@ def play_one_game(game, bots, temperature, temperature_drop):
 
     trajectory.set_final_rewards(state.returns())
     return trajectory
+
+
+def mcts_inference(game, model, state, uct_c, max_simulations, temperature, policy_epsilon=None, policy_alpha=None):
+    bot = initialize_bot(game,
+                         model,
+                         uct_c=uct_c,
+                         max_simulations=max_simulations,
+                         policy_epsilon=policy_epsilon,
+                         policy_alpha=policy_alpha)
+    root = bot.mcts_search(state)
+    return compute_mcts_policy(game, root, temperature)
