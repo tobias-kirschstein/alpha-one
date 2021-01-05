@@ -140,8 +140,8 @@ def mean_total_loss(losses):
 
 
 def copy_and_create_checkpoint(iteration):
-    model_manager.store(model, iteration)
-    return model_manager.load(iteration)
+    model_manager.store_model(model, iteration)
+    return model_manager.load_model(iteration)
 
 
 if __name__ == '__main__':
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     model_manager = OpenSpielModelManager(f"{game_name}/{run_name}")
     model_manager.store_config(model_config)
     model = model_manager.build_model(model_config)
-    
+
     print("Num variables:", model.num_trainable_variables)
     model.print_trainable_variables()
     model_current_best = copy_and_create_checkpoint(0)
