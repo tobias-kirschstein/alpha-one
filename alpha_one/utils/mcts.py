@@ -3,6 +3,26 @@ import numpy as np
 from open_spiel.python.algorithms.alpha_zero import evaluator as evaluator_lib
 from open_spiel.python.algorithms import mcts
 from alpha_one.game.trajectory import GameTrajectory
+from alpha_one.model.config.base import ModelConfig
+
+
+class MCTSConfig(ModelConfig):
+
+    def __init__(self,
+                 uct_c: float,
+                 max_mcts_simulations: int,
+                 temperature: float,
+                 temperature_drop: int = None,
+                 policy_epsilon: float = None,
+                 policy_alpha: float = None):
+        super(MCTSConfig, self).__init__(
+            uct_c=uct_c,
+            max_mcts_simulations=max_mcts_simulations,
+            temperature=temperature,
+            temperature_drop=temperature_drop,
+            policy_epsilon=policy_epsilon,
+            policy_alpha=policy_alpha
+        )
 
 
 def initialize_bot(game, model, uct_c, max_simulations, policy_epsilon=None, policy_alpha=None):
@@ -49,7 +69,7 @@ def play_one_game(game, bots, temperature, temperature_drop):
     while not state.is_terminal():
         root = bots[state.current_player()].mcts_search(state)
 
-        if current_turn < temperature_drop:
+        if not temperature_drop or current_turn < temperature_drop:
             policy = compute_mcts_policy(game, root, temperature)
         else:
             policy = compute_mcts_policy(game, root, 0)

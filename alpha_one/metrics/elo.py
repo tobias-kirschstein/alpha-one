@@ -7,6 +7,7 @@ class EloRatingSystem(RatingSystem):
     def __init__(self, k_factor, initial_elo=0, elo_width=400):
         self.k_factor = k_factor
         self.elo_width = elo_width
+        self.initial_elo = initial_elo
         self.players = defaultdict(lambda: initial_elo)
 
     def update_ratings(self, match_outcomes):
@@ -23,6 +24,13 @@ class EloRatingSystem(RatingSystem):
 
     def get_players(self):
         return list(self.players.keys())
+
+    def add_player(self, player_id, initial_rating: float = None):
+        assert player_id not in self.players, f"Player {player_id} is already registered!"
+        if initial_rating is None:
+            self.players[player_id] = self.initial_elo
+        else:
+            self.players[player_id] = initial_rating
 
     def calculate_win_probability(self, elo_a, elo_b):
         """
