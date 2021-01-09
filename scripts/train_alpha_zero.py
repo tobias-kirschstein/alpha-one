@@ -132,7 +132,7 @@ if __name__ == '__main__':
         print(f"Iteration {iteration}")
 
         # 1 Generate training data with current best model
-        new_train_samples, new_valid_samples = train_manager.generate_training_data(n_games_train, n_games_train,
+        new_train_samples, new_valid_samples = train_manager.generate_training_data(n_games_train, n_games_valid,
                                                                                     mcts_config)
         print(
             f'  - Generated {len(new_train_samples)} additional training samples and {len(new_valid_samples)} additional validation samples')
