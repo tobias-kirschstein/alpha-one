@@ -5,6 +5,7 @@ from open_spiel.python.algorithms.alpha_zero import model as model_lib
 from scipy.stats import entropy
 
 from alpha_one.game.buffer import ReplayBuffer
+from alpha_one.metrics import cross_entropy
 from alpha_one.model.evaluation import EvaluationManager, ParallelEvaluationManager
 from alpha_one.model.model_manager import ModelManager
 from alpha_one.utils.mcts import initialize_bot, play_one_game, MCTSConfig
@@ -144,7 +145,7 @@ class AlphaZeroTrainManager:
                 [valid_sample.legals_mask for valid_sample in valid_samples])
 
             value_loss = np.mean((values - np.array([[sample.value] for sample in valid_samples])) ** 2)
-            policy_loss = np.mean(entropy(np.array([sample.policy for sample in valid_samples]), policies, axis=1))
+            policy_loss = np.mean(cross_entropy(np.array([sample.policy for sample in valid_samples]), policies))
             reg_loss = sum([weight_decay * np.linalg.norm(var.eval())
                             for var in tf.compat.v1.trainable_variables()
                             if "/bias:" not in var.name])
