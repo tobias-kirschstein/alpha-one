@@ -1,4 +1,5 @@
 import collections
+import copy
 from typing import Union
 
 from open_spiel.python.algorithms.alpha_zero import model as model_lib
@@ -100,8 +101,12 @@ class AlphaZeroTrainManager:
                                        mcts_config=mcts_config))
 
         if self.use_parallelism:
-            train_samples = ray.get(train_samples)
-            valid_samples = ray.get(valid_samples)
+            train_samples_ = ray.get(train_samples)
+            valid_samples_ = ray.get(valid_samples)
+            train_samples = copy.deepcopy(train_samples_)
+            valid_samples = copy.deepcopy(valid_samples_)
+            del train_samples_
+            del valid_samples_
 
         train_samples = [sample for batch in train_samples for sample in batch]
         valid_samples = [sample for batch in valid_samples for sample in batch]

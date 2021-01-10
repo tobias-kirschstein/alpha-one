@@ -1,3 +1,5 @@
+import copy
+
 from alpha_one.metrics import MatchOutcome
 from alpha_one.model.model_manager import ModelManager
 from alpha_one.utils.mcts import initialize_bot, play_one_game, MCTSConfig
@@ -73,11 +75,13 @@ class ParallelEvaluationManager:
         for i in range(self.n_evaluations):
             player_id_model_1 = np.random.choice([0, 1])  # ensure that each model will play as each player
 
-            trajectory = _compare_models_parallel.remote(game=self.game, model_manager=self.model_manager,
-                                                         mcts_config=self.mcts_config,
-                                                         player_id_model_1=player_id_model_1,
-                                                         model_checkpoint_1=model_checkpoint_1,
-                                                         model_checkpoint_2=model_checkpoint_2)
+            trajectory_ = _compare_models_parallel.remote(game=self.game, model_manager=self.model_manager,
+                                                          mcts_config=self.mcts_config,
+                                                          player_id_model_1=player_id_model_1,
+                                                          model_checkpoint_1=model_checkpoint_1,
+                                                          model_checkpoint_2=model_checkpoint_2)
+            trajectory = copy.deepcopy(trajectory_)
+            del trajectory_
 
             trajectories.append((trajectory, player_id_model_1))
 
