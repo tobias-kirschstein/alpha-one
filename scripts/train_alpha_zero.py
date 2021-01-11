@@ -30,7 +30,7 @@ n_games_valid = 40
 
 # Model update
 n_most_recent_train_samples = 50000  # Among which training samples to choose to train current model
-n_most_recent_valid_samples = 50000
+n_most_recent_valid_samples = 10000
 n_train_steps = 100  # After how many gradient updates the new model tries to beat the current best
 n_valid_steps = 5
 batch_size = 512
@@ -51,6 +51,7 @@ temperature = 0.5
 temperature_drop = 20
 
 mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, temperature, temperature_drop, policy_epsilon, policy_alpha)
+evaluation_mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, 0, None, None, None)
 
 # Model Hyperparameters
 model_type = 'mlp'
@@ -72,8 +73,6 @@ hyperparameters = dict(
     n_valid_steps=n_valid_steps,
     batch_size=batch_size,
 
-    mcts_config=mcts_config,
-
     n_evaluations=n_evaluations,
     win_ratio_needed=win_ratio_needed,
 
@@ -81,7 +80,9 @@ hyperparameters = dict(
     nn_width=nn_width,
     nn_depth=nn_depth,
     weight_decay=weight_decay,
-    learning_rate=learning_rate
+    learning_rate=learning_rate,
+
+    **mcts_config
 )
 
 
@@ -104,9 +105,9 @@ if __name__ == '__main__':
     model_manager.store_config(model_config)
 
     if ray.is_initialized() and NUM_CPUS > 1:
-        evaluation_manager = ParallelEvaluationManager(game, model_manager, n_evaluations, mcts_config)
+        evaluation_manager = ParallelEvaluationManager(game, model_manager, n_evaluations, evaluation_mcts_config)
     else:
-        evaluation_manager = EvaluationManager(game, n_evaluations, mcts_config)
+        evaluation_manager = EvaluationManager(game, n_evaluations, evaluation_mcts_config)
     train_manager = AlphaZeroTrainManager(game, model_manager, evaluation_manager, n_most_recent_train_samples,
                                           n_most_recent_valid_samples)
 
