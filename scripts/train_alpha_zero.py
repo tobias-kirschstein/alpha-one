@@ -95,7 +95,7 @@ if __name__ == '__main__':
         ray.init(num_cpus=NUM_CPUS)
 
     # Setup model and game
-    model_manager = OpenSpielModelManager(game_name, 'C4-local')
+    model_manager = OpenSpielModelManager(game_name, game_prefix)
     checkpoint_manager = model_manager.new_run()
     run_name = checkpoint_manager.get_run_name()
     # run_name = generate_run_name(f'{LOGS_DIR}/{game_name}', game_prefix)
