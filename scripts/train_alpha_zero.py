@@ -183,7 +183,7 @@ if __name__ == '__main__':
         tensorboard.log_scalar("challenger_win_rate", challenger_win_rate, iteration)
 
         # 4 Replace current best model with challenger model if it is better
-        train_manager.replace_model_with_challenger(challenger_win_rate, win_ratio_needed, iteration)
+        train_manager.replace_model_with_challenger(challenger_win_rate, win_ratio_needed)
         if challenger_win_rate > win_ratio_needed:
             print(f"  - Model at iteration {iteration} supersedes previous model ({challenger_win_rate:.2%} win rate)")
 

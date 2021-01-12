@@ -182,39 +182,10 @@ class AlphaZeroTrainManager:
 
         return challenger_win_rate, challenger_policies, match_outcomes
 
-        # challenger_results = []
-        # challenger_policies = []
-        # match_outcomes = []
-        # for _ in range(n_evaluations):
-        #     mcts_bot_best_model = initialize_bot(self.game, self.model_current_best, mcts_config.uct_c,
-        #                                          mcts_config.max_mcts_simulations,
-        #                                          mcts_config.policy_epsilon, mcts_config.policy_alpha)
-        #     mcts_bot_challenger = initialize_bot(self.game, self.model_challenger, mcts_config.uct_c,
-        #                                          mcts_config.max_mcts_simulations,
-        #                                          mcts_config.policy_epsilon, mcts_config.policy_alpha)
-        #
-        #     player_id_challenger = np.random.choice([0, 1])  # ensure that each model will play as each player
-        #     bots = [mcts_bot_challenger, mcts_bot_best_model] if player_id_challenger == 0 else [mcts_bot_best_model,
-        #                                                                                          mcts_bot_challenger]
-        #
-        #     trajectory = play_one_game(self.game, bots, mcts_config.temperature, mcts_config.temperature_drop)
-        #     challenger_policies.extend([s.policy for s in trajectory.get_player_states(player_id_challenger)])
-        #
-        #     challenger_reward = trajectory.get_final_reward(player_id_challenger)
-        #     challenger_results.append(challenger_reward)
-        #     match_outcomes.append(
-        #         MatchOutcome.win(self.current_generation + 1, self.current_generation)
-        #         if challenger_reward == 1 else
-        #         MatchOutcome.defeat(self.current_generation + 1, self.current_generation))
-        #
-        # n_challenger_wins = (np.array(challenger_results) == 1).sum()
-        # challenger_win_rate = n_challenger_wins / n_evaluations
-        # return challenger_win_rate, challenger_policies, match_outcomes
-
-    def replace_model_with_challenger(self, challenger_win_rate: float, win_ratio_needed: float, iteration: int):
+    def replace_model_with_challenger(self, challenger_win_rate: float, win_ratio_needed: float):
         if challenger_win_rate > win_ratio_needed:
-            self.model_manager.store_model(self.model_challenger, iteration)
-            self.model_current_best = self.model_manager.load_model(iteration)
+            self.model_manager.store_model(self.model_challenger, self.get_player_name_challenger())
+            self.model_current_best = self.model_manager.load_model(self.get_player_name_challenger())
             ratings_challenger = [rating_system.get_rating(self.get_player_name_challenger())
                                   for rating_system
                                   in self.rating_systems]
