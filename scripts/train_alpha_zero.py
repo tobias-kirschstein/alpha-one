@@ -100,16 +100,25 @@ if __name__ == '__main__':
 
     game = pyspiel.load_game(game_name)
 
+    # Setup Model Manager
     model_config = OpenSpielModelConfig(game, model_type, nn_width, nn_depth, weight_decay, learning_rate)
     model_manager = OpenSpielModelManager(f"{game_name}/{run_name}")
     model_manager.store_config(model_config)
 
+    # Setup Evaluation Manager
     if ray.is_initialized() and NUM_CPUS > 1:
         evaluation_manager = ParallelEvaluationManager(game, model_manager, n_evaluations, evaluation_mcts_config)
     else:
         evaluation_manager = EvaluationManager(game, n_evaluations, evaluation_mcts_config)
+
+    # Setup rating systems for evaluation
+    elo_rating_system = EloRatingSystem(40)
+    true_skill_rating_system = TrueSkillRatingSystem()
+    rating_systems = [elo_rating_system, true_skill_rating_system]
+
+    # Setup final training manager
     train_manager = AlphaZeroTrainManager(game, model_manager, evaluation_manager, n_most_recent_train_samples,
-                                          n_most_recent_valid_samples)
+                                          n_most_recent_valid_samples, rating_systems)
 
     print("Num variables:", train_manager.model_challenger.num_trainable_variables)
     train_manager.model_challenger.print_trainable_variables()
@@ -177,10 +186,6 @@ if __name__ == '__main__':
         train_manager.replace_model_with_challenger(challenger_win_rate, win_ratio_needed, iteration)
         if challenger_win_rate > win_ratio_needed:
             print(f"  - Model at iteration {iteration} supersedes previous model ({challenger_win_rate:.2%} win rate)")
-            true_skill_rating_system.add_player(train_manager.get_player_name_challenger(),
-                                                true_skill_rating_system.get_rating(player_name_challenger))
-            elo_rating_system.add_player(train_manager.get_player_name_challenger(),
-                                         elo_rating_system.get_rating(player_name_challenger))
 
         challenger_entropy = calculate_entropy(challenger_policies)
         print(f"  - Challenger entropy: {challenger_entropy:0.3f}")
