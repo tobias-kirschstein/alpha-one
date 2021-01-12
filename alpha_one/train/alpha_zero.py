@@ -1,19 +1,17 @@
 import collections
 import copy
-from typing import Union
+from typing import Union, List
 
+import numpy as np
+import ray
+import tensorflow as tf
 from open_spiel.python.algorithms.alpha_zero import model as model_lib
-from scipy.stats import entropy
 
 from alpha_one.game.buffer import ReplayBuffer
-from alpha_one.metrics import cross_entropy
+from alpha_one.metrics import cross_entropy, RatingSystem
 from alpha_one.model.evaluation import EvaluationManager, ParallelEvaluationManager
 from alpha_one.model.model_manager import ModelManager
 from alpha_one.utils.mcts import initialize_bot, play_one_game, MCTSConfig
-import ray
-
-import numpy as np
-import tensorflow as tf
 
 
 class Losses(collections.namedtuple("Losses", "policy value l2")):
@@ -56,13 +54,19 @@ def _generate_one_game(game, model_current_best, mcts_config: MCTSConfig):
 
 class AlphaZeroTrainManager:
 
-    def __init__(self, game, model_manager: ModelManager, evaluation_manager: Union[EvaluationManager, ParallelEvaluationManager], replay_buffer_size,
-                 replay_buffer_size_valid):
+    def __init__(self,
+                 game,
+                 model_manager: ModelManager,
+                 evaluation_manager: Union[EvaluationManager, ParallelEvaluationManager],
+                 replay_buffer_size,
+                 replay_buffer_size_valid,
+                 rating_systems: List[RatingSystem]):
         self.game = game
         self.model_manager = model_manager
         self.evaluation_manager = evaluation_manager
         self.replay_buffer = ReplayBuffer(replay_buffer_size)
         self.replay_buffer_valid = ReplayBuffer(replay_buffer_size_valid)
+        self.rating_systems = rating_systems
         self.iteration = 1
 
         # self.player_name_current_best = 0
@@ -211,9 +215,17 @@ class AlphaZeroTrainManager:
         if challenger_win_rate > win_ratio_needed:
             self.model_manager.store_model(self.model_challenger, iteration)
             self.model_current_best = self.model_manager.load_model(iteration)
+            ratings_challenger = [rating_system.get_rating(self.get_player_name_challenger())
+                                  for rating_system
+                                  in self.rating_systems]
+
             # self.player_name_current_best = self.player_name_challenger
             # self.player_name_challenger = iteration + 1
             self.current_generation += 1
+
+            # Copy ratings of (previous) challenger such that new challenger will be identical
+            for rating_system, rating_challenger in zip(self.rating_systems, ratings_challenger):
+                rating_system.add_player(self.get_player_name_challenger(), rating_challenger)
 
     def get_player_name_current_best(self):
         return self.current_generation

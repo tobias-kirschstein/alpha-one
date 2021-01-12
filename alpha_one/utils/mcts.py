@@ -1,7 +1,8 @@
 import numpy as np
-
-from open_spiel.python.algorithms.alpha_zero import evaluator as evaluator_lib
 from open_spiel.python.algorithms import mcts
+from open_spiel.python.algorithms.alpha_zero import evaluator as evaluator_lib
+from open_spiel.python.algorithms.mcts import RandomRolloutEvaluator
+
 from alpha_one.game.trajectory import GameTrajectory
 from alpha_one.model.config.base import ModelConfig
 
@@ -26,7 +27,7 @@ class MCTSConfig(ModelConfig):
 
 
 def initialize_bot(game, model, uct_c, max_simulations, policy_epsilon=None, policy_alpha=None):
-    if policy_epsilon == None or policy_alpha == None:
+    if policy_epsilon is None or policy_alpha is None:
         noise = None
     else:
         noise = (policy_epsilon, policy_alpha)
@@ -38,6 +39,27 @@ def initialize_bot(game, model, uct_c, max_simulations, policy_epsilon=None, pol
         uct_c,
         max_simulations,
         az_evaluator,
+        solve=False,
+        dirichlet_noise=noise,
+        child_selection_fn=mcts.SearchNode.puct_value,
+        verbose=False)
+
+    return bot
+
+
+def initialize_rollout_mcts_bot(game, n_rollouts, uct_c, max_simulations, policy_epsilon=None, policy_alpha=None):
+    if policy_epsilon is None or policy_alpha is None:
+        noise = None
+    else:
+        noise = (policy_epsilon, policy_alpha)
+
+    evaluator = RandomRolloutEvaluator(n_rollouts)
+
+    bot = mcts.MCTSBot(
+        game,
+        uct_c,
+        max_simulations,
+        evaluator,
         solve=False,
         dirichlet_noise=noise,
         child_selection_fn=mcts.SearchNode.puct_value,

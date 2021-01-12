@@ -45,6 +45,9 @@ class MatchOutcome:
         self.players[self.players.index(old_player_name)] = new_player_name
 
     def with_renamed_players(self, player_name_mapping: dict):
-        for old_player_name, new_player_name in player_name_mapping.items():
-            self.rename_player(old_player_name, new_player_name)
+        self.players = [player_name_mapping[player_id]
+                        if player_id in player_name_mapping
+                        else player_id
+                        for player_id
+                        in self.players]
         return self
