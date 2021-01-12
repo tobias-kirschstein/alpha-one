@@ -9,11 +9,11 @@ from alpha_one.model.config import OpenSpielModelConfig
 from alpha_one.model.evaluation import ParallelEvaluationManager, EvaluationManager
 from alpha_one.model.model_manager import OpenSpielModelManager
 from alpha_one.train import AlphaZeroTrainManager
-from alpha_one.utils.logging import TensorboardLogger, generate_run_name
+from alpha_one.utils.logging import TensorboardLogger
 from alpha_one.utils.mcts import MCTSConfig
 from env import MODEL_SAVES_DIR, LOGS_DIR
 
-NUM_CPUS = 2
+NUM_CPUS = 1
 
 # Training hyperparameters
 game_name = 'connect_four'
@@ -95,19 +95,24 @@ if __name__ == '__main__':
         ray.init(num_cpus=NUM_CPUS)
 
     # Setup model and game
-    run_name = generate_run_name(f'{LOGS_DIR}/{game_name}', game_prefix)
-    print(f"Starting run: {run_name}")
+    model_manager = OpenSpielModelManager(game_name, 'C4-local')
+    checkpoint_manager = model_manager.new_run()
+    run_name = checkpoint_manager.get_run_name()
+    # run_name = generate_run_name(f'{LOGS_DIR}/{game_name}', game_prefix)
+    print("#===============================")
+    print(f"# Starting run: {run_name}")
+    print("#===============================")
 
     game = pyspiel.load_game(game_name)
 
     # Setup Model Manager
     model_config = OpenSpielModelConfig(game, model_type, nn_width, nn_depth, weight_decay, learning_rate)
-    model_manager = OpenSpielModelManager(f"{game_name}/{run_name}")
-    model_manager.store_config(model_config)
+    # model_manager = OpenSpielCheckpointManager(f"{game_name}/{run_name}")
+    checkpoint_manager.store_config(model_config)
 
     # Setup Evaluation Manager
     if ray.is_initialized() and NUM_CPUS > 1:
-        evaluation_manager = ParallelEvaluationManager(game, model_manager, n_evaluations, evaluation_mcts_config)
+        evaluation_manager = ParallelEvaluationManager(game, checkpoint_manager, n_evaluations, evaluation_mcts_config)
     else:
         evaluation_manager = EvaluationManager(game, n_evaluations, evaluation_mcts_config)
 
@@ -117,7 +122,7 @@ if __name__ == '__main__':
     rating_systems = [elo_rating_system, true_skill_rating_system]
 
     # Setup final training manager
-    train_manager = AlphaZeroTrainManager(game, model_manager, evaluation_manager, n_most_recent_train_samples,
+    train_manager = AlphaZeroTrainManager(game, checkpoint_manager, evaluation_manager, n_most_recent_train_samples,
                                           n_most_recent_valid_samples, rating_systems)
 
     print("Num variables:", train_manager.model_challenger.num_trainable_variables)

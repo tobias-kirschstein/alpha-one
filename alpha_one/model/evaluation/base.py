@@ -1,7 +1,7 @@
 import copy
 
 from alpha_one.metrics import MatchOutcome
-from alpha_one.model.model_manager import ModelManager
+from alpha_one.model.model_manager import CheckpointManager
 from alpha_one.utils.mcts import initialize_bot, play_one_game, MCTSConfig
 import numpy as np
 import ray
@@ -23,10 +23,10 @@ def _compare_models(game, model_1, model_2, mcts_config: MCTSConfig, player_id_m
 
 
 @ray.remote(num_returns=1)
-def _compare_models_parallel(game, model_manager: ModelManager, mcts_config: MCTSConfig, player_id_model_1,
+def _compare_models_parallel(game, checkpoint_manager: CheckpointManager, mcts_config: MCTSConfig, player_id_model_1,
                              model_checkpoint_1, model_checkpoint_2):
-    model_1 = model_manager.load_model(model_checkpoint_1)
-    model_2 = model_manager.load_model(model_checkpoint_2)
+    model_1 = checkpoint_manager.load_checkpoint(model_checkpoint_1)
+    model_2 = checkpoint_manager.load_checkpoint(model_checkpoint_2)
     return _compare_models(game, model_1, model_2, mcts_config, player_id_model_1)
 
 
@@ -62,9 +62,9 @@ class EvaluationManager:
 
 class ParallelEvaluationManager:
 
-    def __init__(self, game, model_manager: ModelManager, n_evaluations, mcts_config: MCTSConfig):
+    def __init__(self, game, checkpoint_manager: CheckpointManager, n_evaluations, mcts_config: MCTSConfig):
         self.game = game
-        self.model_manager = model_manager
+        self.checkpoint_manager = checkpoint_manager
         self.n_evaluations = n_evaluations
         self.mcts_config = mcts_config
 
@@ -75,7 +75,7 @@ class ParallelEvaluationManager:
         for i in range(self.n_evaluations):
             player_id_model_1 = np.random.choice([0, 1])  # ensure that each model will play as each player
 
-            trajectory_ = _compare_models_parallel.remote(game=self.game, model_manager=self.model_manager,
+            trajectory_ = _compare_models_parallel.remote(game=self.game, checkpoint_manager=self.checkpoint_manager,
                                                           mcts_config=self.mcts_config,
                                                           player_id_model_1=player_id_model_1,
                                                           model_checkpoint_1=model_checkpoint_1,

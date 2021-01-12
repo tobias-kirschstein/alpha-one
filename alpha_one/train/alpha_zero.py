@@ -10,7 +10,7 @@ from open_spiel.python.algorithms.alpha_zero import model as model_lib
 from alpha_one.game.buffer import ReplayBuffer
 from alpha_one.metrics import cross_entropy, RatingSystem
 from alpha_one.model.evaluation import EvaluationManager, ParallelEvaluationManager
-from alpha_one.model.model_manager import ModelManager
+from alpha_one.model.model_manager import CheckpointManager
 from alpha_one.utils.mcts import initialize_bot, play_one_game, MCTSConfig
 
 
@@ -35,9 +35,9 @@ class Losses(collections.namedtuple("Losses", "policy value l2")):
 
 
 @ray.remote(num_returns=1)
-def _generate_one_game_parallel(game, model_manager: ModelManager, mcts_config: MCTSConfig):
+def _generate_one_game_parallel(game, checkpoint_manager: CheckpointManager, mcts_config: MCTSConfig):
     # Tensorflow models are not pickeable. Hence, the worker has to load the model from the disk
-    model_current_best = model_manager.load_model(-1)
+    model_current_best = checkpoint_manager.load_checkpoint(-1)
     return _generate_one_game(game, model_current_best, mcts_config)
 
 
@@ -56,13 +56,13 @@ class AlphaZeroTrainManager:
 
     def __init__(self,
                  game,
-                 model_manager: ModelManager,
+                 checkpoint_manager: CheckpointManager,
                  evaluation_manager: Union[EvaluationManager, ParallelEvaluationManager],
                  replay_buffer_size,
                  replay_buffer_size_valid,
                  rating_systems: List[RatingSystem]):
         self.game = game
-        self.model_manager = model_manager
+        self.checkpoint_manager = checkpoint_manager
         self.evaluation_manager = evaluation_manager
         self.replay_buffer = ReplayBuffer(replay_buffer_size)
         self.replay_buffer_valid = ReplayBuffer(replay_buffer_size_valid)
@@ -73,9 +73,9 @@ class AlphaZeroTrainManager:
         # self.player_name_challenger = 1
         self.current_generation = 0
 
-        self.model_current_best = model_manager.build_model()
-        model_manager.store_model(self.model_current_best, 0)
-        self.model_challenger = model_manager.load_model(0)
+        self.model_current_best = checkpoint_manager.build_model()
+        checkpoint_manager.store_checkpoint(self.model_current_best, 0)
+        self.model_challenger = checkpoint_manager.load_checkpoint(0)
         self.use_parallelism = ray.is_initialized()
         if self.use_parallelism:
             print("AlphaZero Train manager will use parallelism")
@@ -87,7 +87,7 @@ class AlphaZeroTrainManager:
         for _ in range(n_games_train):
             if self.use_parallelism:
                 train_samples.append(
-                    _generate_one_game_parallel.remote(game=self.game, model_manager=self.model_manager,
+                    _generate_one_game_parallel.remote(game=self.game, checkpoint_manager=self.checkpoint_manager,
                                                        mcts_config=mcts_config))
             else:
                 train_samples.append(
@@ -97,7 +97,7 @@ class AlphaZeroTrainManager:
         for _ in range(n_games_valid):
             if self.use_parallelism:
                 valid_samples.append(
-                    _generate_one_game_parallel.remote(game=self.game, model_manager=self.model_manager,
+                    _generate_one_game_parallel.remote(game=self.game, checkpoint_manager=self.checkpoint_manager,
                                                        mcts_config=mcts_config))
             else:
                 valid_samples.append(
@@ -119,24 +119,6 @@ class AlphaZeroTrainManager:
         self.replay_buffer_valid.extend(valid_samples)
 
         return train_samples, valid_samples
-
-        # while True:
-        #     bot = initialize_bot(self.game, self.model_current_best, mcts_config.uct_c,
-        #                          mcts_config.max_mcts_simulations, mcts_config.policy_epsilon,
-        #                          mcts_config.policy_alpha)
-        #     trajectory = play_one_game(self.game, [bot, bot], mcts_config.temperature, mcts_config.temperature_drop)
-        #     p1_outcome = trajectory.get_final_reward(0)
-        #     new_train_states = [model_lib.TrainInput(s.observation, s.legals_mask, s.policy, value=p1_outcome)
-        #                         for s in trajectory.states]
-        #     if len(train_samples) < n_new_train_samples:
-        #         self.replay_buffer.extend(new_train_states)
-        #         train_samples.extend(new_train_states)
-        #     else:
-        #         self.replay_buffer_valid.extend(new_train_states)
-        #         valid_samples.extend(new_train_states)
-        #         if len(valid_samples) > n_new_valid_samples:
-        #             break
-        # return train_samples, valid_samples
 
     def train_model(self, n_train_steps, n_valid_steps, batch_size, weight_decay):
         train_losses = []
@@ -166,7 +148,7 @@ class AlphaZeroTrainManager:
         if isinstance(self.evaluation_manager, ParallelEvaluationManager):
             # Hack: store challenger model as checkpoint '-2' as Tensorflow models cannot be pickled (and thus
             # cannot be sent to the Ray workers). Instead, the ray workers have to load the models from disk
-            self.model_manager.store_model(self.model_challenger, -2)
+            self.checkpoint_manager.store_checkpoint(self.model_challenger, -2)
             challenger_win_rate, trajectories, match_outcomes = self.evaluation_manager.compare_models(-2, -1)
         else:
             challenger_win_rate, trajectories, match_outcomes = self.evaluation_manager.compare_models(
@@ -184,8 +166,8 @@ class AlphaZeroTrainManager:
 
     def replace_model_with_challenger(self, challenger_win_rate: float, win_ratio_needed: float):
         if challenger_win_rate > win_ratio_needed:
-            self.model_manager.store_model(self.model_challenger, self.get_player_name_challenger())
-            self.model_current_best = self.model_manager.load_model(self.get_player_name_challenger())
+            self.checkpoint_manager.store_checkpoint(self.model_challenger, self.get_player_name_challenger())
+            self.model_current_best = self.checkpoint_manager.load_checkpoint(self.get_player_name_challenger())
             ratings_challenger = [rating_system.get_rating(self.get_player_name_challenger())
                                   for rating_system
                                   in self.rating_systems]

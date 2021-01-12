@@ -31,5 +31,6 @@ def list_file_numbering(directory, prefix, suffix=None):
         suffix = ""
     regex = re.compile(f"{prefix}-(-?\d+)$")
     file_names = glob(f"{directory}/{prefix}-*{suffix}")
-    numbering = sorted([int(regex.search(Path(file_name).stem).group(1)) for file_name in file_names])
+    file_names = [Path(file_name).stem for file_name in file_names]
+    numbering = sorted([int(regex.search(file_name).group(1)) for file_name in file_names if regex.match(file_name)])
     return numbering
