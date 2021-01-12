@@ -13,10 +13,12 @@ def generate_run_name(run_dir, run_prefix):
     """
     regex = re.compile(f"{run_prefix}-(\d+)$")
     run_names = glob(f"{run_dir}/{run_prefix}-*")
-    run_ids = [int(regex.search(Path(run_name).stem).group(1)) for run_name in run_names]
+    run_names = [Path(run_name).stem for run_name in run_names]
+    run_ids = [int(regex.search(run_name).group(1)) for run_name in run_names if regex.match(run_name)]
 
     run_id = max(run_ids) + 1 if len(run_ids) > 0 else 1
     return f"{run_prefix}-{run_id}"
+
 
 class MetricsLogger(ABC):
 
@@ -45,5 +47,5 @@ class TensorboardLogger(MetricsLogger):
     def flush(self):
         self.writer.flush()
 
-    def log_hyperparameters(self, hyperparameters:dict):
+    def log_hyperparameters(self, hyperparameters: dict):
         self.writer.add_hparams(hyperparameters, dict())
