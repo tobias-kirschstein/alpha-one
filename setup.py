@@ -6,5 +6,5 @@ setup(name='alpha_one',
       author='Tobias Kirschstein',
       author_email='kirschto@in.tum.de',
       packages=['alpha_one'],
-      install_requires=['envyaml', 'trueskill', 'open_spiel', 'ray', 'numpy'],
+      install_requires=['envyaml', 'trueskill', 'open_spiel', 'ray', 'numpy', 'tqdm'],
       zip_safe=False)
