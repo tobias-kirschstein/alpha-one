@@ -17,16 +17,16 @@ class CheckpointManager(ABC):
         pass
 
     @abstractmethod
-    def _load_checkpoint(self, iteration):
+    def _load_checkpoint(self, iteration, **kwargs):
         pass
 
-    def load_checkpoint(self, checkpoint):
+    def load_checkpoint(self, checkpoint, **kwargs):
         if checkpoint in {'latest', 'last'}:
             checkpoint = -1
         if checkpoint < 0:
             checkpoints = self.list_checkpoints()
             checkpoint = checkpoints[checkpoint]
-        return self._load_checkpoint(checkpoint)
+        return self._load_checkpoint(checkpoint, **kwargs)
 
     @abstractmethod
     def list_checkpoints(self):
@@ -46,7 +46,7 @@ class CheckpointManager(ABC):
     def store_config(self, config: dict):
         save_pickled(config, f"{self.model_store_path}/config")
 
-    def load_config(self):
+    def load_config(self, **kwargs):
         return load_pickled(f"{self.model_store_path}/config")
     
     def get_run_name(self):

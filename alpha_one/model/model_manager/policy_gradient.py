@@ -23,10 +23,16 @@ class PolicyGradientCheckpointManager(CheckpointManager):
         Path(self.model_store_path).mkdir(parents=True, exist_ok=True)
         model.save(f"{self.model_store_path}/checkpoint-{iteration}")
 
-    def _load_checkpoint(self, iteration):
-        model = self._build_model(self.load_config())
+    def _load_checkpoint(self, iteration, player_id=None):
+        model = self._build_model(self.load_config(player_id=player_id))
         model.restore(f"{self.model_store_path}/checkpoint-{iteration}")
         return model
+
+    def load_config(self, player_id=None):
+        config = super().load_config()
+        if player_id is not None:
+            config.player_id = player_id
+        return config
 
     def list_checkpoints(self):
         return list_file_numbering(self.model_store_path, "checkpoint")

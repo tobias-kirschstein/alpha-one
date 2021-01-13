@@ -22,7 +22,7 @@ class OpenSpielCheckpointManager(CheckpointManager):
         Path(self.model_store_path).mkdir(parents=True, exist_ok=True)
         model.save_checkpoint(iteration)
 
-    def _load_checkpoint(self, iteration):
+    def _load_checkpoint(self, iteration, **kwargs):
         new_model = self.build_model(self.load_config())
         new_model.load_checkpoint(f"{self.model_store_path}/checkpoint-{iteration}")
         return new_model
