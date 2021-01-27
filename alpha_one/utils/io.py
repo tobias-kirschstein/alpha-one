@@ -27,6 +27,20 @@ def create_directories(path):
 
 
 def list_file_numbering(directory, prefix, suffix=None):
+    """
+    Finds all files in the specified directory that match the given {prefix}{number}{suffix} pattern.
+    All found {number}s are returned as a list in ascending order.
+
+    Parameters
+    ----------
+        directory: where to search for file numberings
+        prefix: prefix of files to be considered
+        suffix: (optional) suffix of files to be considered
+
+    Returns
+    -------
+        a list of numbers (without leading zeros) that appear in the matched file names in between `prefix` and `suffix`.
+    """
     if suffix is None:
         suffix = ""
     regex = re.compile(f"{prefix}-(-?\d+)$")

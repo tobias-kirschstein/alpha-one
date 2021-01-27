@@ -34,3 +34,6 @@ class MCTSAgent(Agent):
 
         action = np.random.choice(len(policy), p=policy)
         return action, policy
+
+    def evaluate(self, state: pyspiel.State) -> float:
+        raise NotImplementedError()

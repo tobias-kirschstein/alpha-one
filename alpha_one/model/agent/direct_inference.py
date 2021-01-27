@@ -9,5 +9,11 @@ class DirectInferenceAgent(Agent):
         self.model = model
 
     def next_move(self, state: pyspiel.State) -> (int, np.array):
-        action, policy = self.model.inference([state.observation_tensor()], [state.legal_actions_mask()])
-        return action[0], policy[0]
+        _, policy = self.model.inference([state.observation_tensor()], [state.legal_actions_mask()])
+        policy = policy[0]  # NN returns batch of predictions
+        action = np.random.choice(len(policy), p=policy)
+        return action, policy
+
+    def evaluate(self, state: pyspiel.State) -> float:
+        value, _ = self.model.inference([state.observation_tensor()], [state.legal_actions_mask()])
+        return value[0]
