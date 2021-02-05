@@ -1,4 +1,5 @@
 from typing import List
+import pyspiel
 
 
 class DummyGame:
@@ -7,6 +8,19 @@ class DummyGame:
 
     def new_initial_state(self):
         return DummyGameState(self, 0, list(range(self.n_cards)), list(range(self.n_cards)), [], [])
+
+    def get_type(self):
+        return pyspiel.GameType('dummy', 'dummy', pyspiel.GameType.Dynamics.SEQUENTIAL,
+                                pyspiel.GameType.ChanceMode.DETERMINISTIC,
+                                pyspiel.GameType.Information.IMPERFECT_INFORMATION,
+                                pyspiel.GameType.Utility.ZERO_SUM, pyspiel.GameType.RewardModel.TERMINAL,
+                                2, 2,
+                                False, False,
+                                True, True,
+                                dict())
+
+    def max_utility(self):
+        return 1
 
 
 class DummyGameState:
@@ -24,8 +38,11 @@ class DummyGameState:
         self.player_1_cards_played = player_1_cards_played
         self.player_2_cards_played = player_2_cards_played
 
-    def legal_actions(self) -> List[int]:
-        if self._current_player == 0:
+    def legal_actions(self, player=None) -> List[int]:
+        if player is None:
+            player = self._current_player
+
+        if player == 0:
             return self.player_1_cards
         else:
             return self.player_2_cards
@@ -83,12 +100,15 @@ class DummyGameState:
     def is_terminal(self) -> bool:
         return len(self.player_1_cards) == 0 and len(self.player_2_cards) == 0
 
+    def is_chance_node(self) -> bool:
+        return False
+
     def current_player(self) -> int:
         return self._current_player
 
     def clone(self):
-        return DummyGameState(self.game, self._current_player, self.player_1_cards, self.player_2_cards,
-                              self.player_1_cards_played, self.player_2_cards_played)
+        return DummyGameState(self.game, self._current_player, list(self.player_1_cards), list(self.player_2_cards),
+                              list(self.player_1_cards_played), list(self.player_2_cards_played))
 
     def returns(self) -> List[float]:
         assert self.is_terminal(), "Only terminal nodes have a return"
@@ -106,3 +126,10 @@ class DummyGameState:
             return [-1, 1]
         else:
             return [0, 0]
+
+    def to_str(self):
+        return f"{self._current_player}, {self.player_1_cards_played}, {self.player_2_cards_played}, {self.player_1_cards}, {self.player_2_cards}"
+
+    def __str__(self):
+        return self.to_str()
+
