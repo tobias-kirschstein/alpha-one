@@ -2,7 +2,10 @@ from abc import abstractmethod
 from typing import List, Tuple
 
 import pyspiel
+import numpy as np
 from open_spiel.python.algorithms.mcts import Evaluator
+
+from alpha_one.utils.statemask import get_state_mask
 
 from alpha_one.game.information_set import InformationSetGenerator
 
@@ -25,6 +28,78 @@ class ImperfectInformationMCTSEvaluator(Evaluator):
     @abstractmethod
     def evaluate_observation_node(self, information_set_generator: InformationSetGenerator) -> (float, float):
         raise NotImplementedError
+
+class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluator):
+    
+    def __init__(self, state_to_value, observation_model, game_model):
+
+        self._observation_model = observation_model
+    
+        self._game_model = game_model
+    
+        self._state_to_value = state_to_value
+    
+    def prior_observation_node(self, information_set_generator: InformationSetGenerator) \
+            -> List[Tuple[pyspiel.State, float]]:
+        
+        information_set = information_set_generator.calculate_information_set()
+        state_mask, index_track = get_state_mask(self._state_to_value, information_set)
+        
+        obs = np.expand_dims(information_set[0].observation_tensor(information_set_generator.current_player()), 
+                             0)
+        mask = np.expand_dims(state_mask, 0)
+        
+        _, policy = self._observation_model.inference(obs, mask)
+        
+        policy = policy[0]
+        
+        prior = []
+        for i in range(len(information_set)):
+            prior.append((information_set[i], policy[index_track[i]]))
+            
+        return prior
+        
+
+    def evaluate_observation_node(self, information_set_generator: InformationSetGenerator) -> (float, float):
+        
+        information_set = information_set_generator.calculate_information_set()
+        state_mask, _ = get_state_mask(self._state_to_value, information_set)
+        
+        obs = np.expand_dims(information_set[0].observation_tensor(information_set_generator.current_player()), 
+                             0)
+        mask = np.expand_dims(state_mask, 0)
+        
+        value, _ = self._observation_model.inference(obs, mask)
+        value = value[0, 0]
+
+        return [value, -value]
+
+    def evaluate(self, state):
+        
+        obs = np.expand_dims(state.observation_tensor(), 0)
+        mask = np.expand_dims(state.legal_actions_mask(), 0)
+        
+        value, _ = self._game_model.inference(obs, mask)
+        
+        value = value[0, 0]
+
+        return [value, -value]
+        
+        
+
+    def prior(self, state):
+        
+        if state.is_chance_node():
+            return state.chance_outcomes()
+        else:
+            obs = np.expand_dims(state.observation_tensor(), 0)
+            mask = np.expand_dims(state.legal_actions_mask(), 0)
+        
+            _, policy = self._game_model.inference(obs, mask)
+        
+            policy = policy[0]
+        
+        return [(action, policy[action]) for action in state.legal_actions()]
 
 
 class BasicImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluator):
