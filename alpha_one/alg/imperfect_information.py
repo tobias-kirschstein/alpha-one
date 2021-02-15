@@ -102,6 +102,39 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         return [(action, policy[action]) for action in state.legal_actions()]
 
 
+class DeterminizedMCTSEvaluator(Evaluator):
+    
+    def __init__(self, model):
+
+        self._model = model
+
+
+    def evaluate(self, state):
+        
+        obs = np.expand_dims(state.observation_tensor(), 0)
+        mask = np.expand_dims(state.legal_actions_mask(), 0)
+        
+        value, _ = self._model.inference(obs, mask)
+        
+        value = value[0, 0]
+
+        return [value, -value]
+        
+        
+
+    def prior(self, state):
+        
+        obs = np.expand_dims(state.observation_tensor(), 0)
+        mask = np.expand_dims(state.legal_actions_mask(), 0)
+        
+        _, policy = self._model.inference(obs, mask)
+        
+        policy = policy[0]
+        
+        return [(action, policy[action]) for action in state.legal_actions()]
+
+
+
 class BasicImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluator):
     """
     Very stupid heuristic that just evaluates all nodes with 0 and yields a uniform distribution over possible choices.
