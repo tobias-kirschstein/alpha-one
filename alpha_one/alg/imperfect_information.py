@@ -45,8 +45,7 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         information_set = information_set_generator.calculate_information_set()
         state_mask, index_track = get_state_mask(self._state_to_value, information_set)
         
-        obs = np.expand_dims(information_set[0].observation_tensor(information_set_generator.current_player()), 
-                             0)
+        obs = np.expand_dims(state_mask, 0)
         mask = np.expand_dims(state_mask, 0)
         
         _, policy = self._observation_model.inference(obs, mask)
@@ -65,8 +64,7 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         information_set = information_set_generator.calculate_information_set()
         state_mask, _ = get_state_mask(self._state_to_value, information_set)
         
-        obs = np.expand_dims(information_set[0].observation_tensor(information_set_generator.current_player()), 
-                             0)
+        obs = np.expand_dims(state_mask, 0)
         mask = np.expand_dims(state_mask, 0)
         
         value, _ = self._observation_model.inference(obs, mask)
