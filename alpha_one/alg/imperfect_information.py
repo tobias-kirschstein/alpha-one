@@ -41,6 +41,7 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
     
     def prior_observation_node(self, information_set_generator: InformationSetGenerator) \
             -> List[Tuple[pyspiel.State, float]]:
+
         
         information_set = information_set_generator.calculate_information_set()
         state_mask, index_track = get_state_mask(self._state_to_value, information_set)
@@ -60,6 +61,10 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         
 
     def evaluate_observation_node(self, information_set_generator: InformationSetGenerator) -> (float, float):
+
+        if information_set_generator.current_player() == -1:
+    	    return [0, 0]
+
         
         information_set = information_set_generator.calculate_information_set()
         state_mask, _ = get_state_mask(self._state_to_value, information_set)
@@ -73,6 +78,9 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         return [value, -value]
 
     def evaluate(self, state):
+
+        if state.is_chance_node():
+            return [0, 0]
         
         obs = np.expand_dims(state.observation_tensor(), 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
@@ -89,13 +97,13 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         
         if state.is_chance_node():
             return state.chance_outcomes()
-        else:
-            obs = np.expand_dims(state.observation_tensor(), 0)
-            mask = np.expand_dims(state.legal_actions_mask(), 0)
         
-            _, policy = self._game_model.inference(obs, mask)
+        obs = np.expand_dims(state.observation_tensor(), 0)
+        mask = np.expand_dims(state.legal_actions_mask(), 0)
         
-            policy = policy[0]
+        _, policy = self._game_model.inference(obs, mask)
+        
+        policy = policy[0]
         
         return [(action, policy[action]) for action in state.legal_actions()]
 

@@ -18,7 +18,7 @@ from env import MODEL_SAVES_DIR, LOGS_DIR
 NUM_CPUS = 1
 
 # Training hyperparameters
-game_name = 'kuhn_poker'
+game_name = 'leduc_poker'
 game_prefix = 'LP'
 
 model_saves_path = f'{MODEL_SAVES_DIR}/{game_name}'
@@ -200,6 +200,7 @@ if __name__ == '__main__':
         tensorboard.log_scalar("best_model_generation", player_name_current_best, iteration)
 
         tensorboard.flush()
+
 
 
 

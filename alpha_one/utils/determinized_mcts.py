@@ -41,12 +41,10 @@ def compute_mcts_policy(game, model, state, information_set_generator, mcts_conf
         root = bot.mcts_search(s)
 
         for c in root.children:
-            if c.explore_count == 0:
-                policy[c.action] += 0.1 * c.total_reward
-            else:
-                policy[c.action] += c.total_reward / c.explore_count
-    
-    policy = (policy - policy.min()) / (policy.max() - policy.min())
+            policy[c.action] += c.explore_count
+
+    if mcts_config.temperature != 0:
+        policy = policy ** (1 / mcts_config.temperature)
     policy /= policy.sum()
     return policy
 
@@ -55,6 +53,8 @@ def play_one_game_d(game, models, mcts_config: MCTSConfig):
 
     state = game.new_initial_state()
     information_set_generator = InformationSetGenerator(game)
+
+    current_turn = 0
 
     while not state.is_terminal():
 
@@ -67,20 +67,32 @@ def play_one_game_d(game, models, mcts_config: MCTSConfig):
         elif state.current_player() == 0:
 
             policy = compute_mcts_policy(game, models[state.current_player()], state, information_set_generator, mcts_config)
-            action = np.random.choice(len(policy), p=policy)
+            if mcts_config.temperature_drop == None:
+                action = np.argmax(policy)
+            elif current_turn < mcts_config.temperature_drop:
+                action = np.random.choice(len(policy), p=policy)
+            else:
+                action = np.argmax(policy)
             trajectory.append(state, action, policy)
             information_set_generator.register_action(action)
             state.apply_action(action)
             information_set_generator.register_observation(state)
+            current_turn += 1
 
         else:
 
             policy = compute_mcts_policy(game, models[state.current_player()], state, information_set_generator, mcts_config)
-            action = np.random.choice(len(policy), p=policy)
+            if mcts_config.temperature_drop == None:
+                action = np.argmax(policy)
+            elif current_turn < mcts_config.temperature_drop:
+                action = np.random.choice(len(policy), p=policy)
+            else:
+                action = np.argmax(policy)
             trajectory.append(state, action, policy)
             information_set_generator.register_action(action)
             state.apply_action(action)
             information_set_generator.register_observation(state)
+            current_turn += 1
 
 
 
