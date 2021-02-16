@@ -15,14 +15,16 @@ class MCTSConfig(ModelConfig):
                  temperature: float,
                  temperature_drop: int = None,
                  policy_epsilon: float = None,
-                 policy_alpha: float = None):
+                 policy_alpha: float = None,
+                 imperfect_info: bool = False):
         super(MCTSConfig, self).__init__(
             uct_c=uct_c,
             max_mcts_simulations=max_mcts_simulations,
             temperature=temperature,
             temperature_drop=temperature_drop,
             policy_epsilon=policy_epsilon,
-            policy_alpha=policy_alpha
+            policy_alpha=policy_alpha,
+            imperfect_info=imperfect_info
         )
 
 

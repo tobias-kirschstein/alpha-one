@@ -108,6 +108,9 @@ class DeterminizedMCTSEvaluator(Evaluator):
 
 
     def evaluate(self, state):
+
+        if state.is_chance_node():
+            return [0, 0]
         
         obs = np.expand_dims(state.observation_tensor(), 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
@@ -121,7 +124,10 @@ class DeterminizedMCTSEvaluator(Evaluator):
         
 
     def prior(self, state):
-        
+
+        if state.is_chance_node():
+            return state.chance_outcomes()
+
         obs = np.expand_dims(state.observation_tensor(), 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
         
