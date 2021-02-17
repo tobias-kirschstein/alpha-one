@@ -41,10 +41,15 @@ def compute_mcts_policy(game, model, state, information_set_generator, mcts_conf
         root = bot.mcts_search(s)
 
         for c in root.children:
-            policy[c.action] += c.explore_count
-
+            if c.explore_count == 0:
+        	    policy[c.action] += c.total_reward
+            else:
+                policy[c.action] += c.total_reward / c.explore_count
+    
     if mcts_config.temperature != 0:
         policy = policy ** (1 / mcts_config.temperature)
+    policy = (policy - np.min(policy)) / (np.max(policy) - np.min(policy))
+    policy[np.where(state.legal_actions_mask() == 0)] = 0
     policy /= policy.sum()
     return policy
 
@@ -66,7 +71,7 @@ def play_one_game_d(game, models, mcts_config: MCTSConfig):
 
         elif state.current_player() == 0:
 
-            policy = compute_mcts_policy(game, models[state.current_player()], state, information_set_generator, mcts_config)
+            policy = compute_mcts_policy(game, models[0], state, information_set_generator, mcts_config)
             if mcts_config.temperature_drop == None:
                 action = np.argmax(policy)
             elif current_turn < mcts_config.temperature_drop:
@@ -81,7 +86,7 @@ def play_one_game_d(game, models, mcts_config: MCTSConfig):
 
         else:
 
-            policy = compute_mcts_policy(game, models[state.current_player()], state, information_set_generator, mcts_config)
+            policy = compute_mcts_policy(game, models[1], state, information_set_generator, mcts_config)
             if mcts_config.temperature_drop == None:
                 action = np.argmax(policy)
             elif current_turn < mcts_config.temperature_drop:

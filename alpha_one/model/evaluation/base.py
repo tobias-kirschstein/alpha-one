@@ -59,10 +59,10 @@ class EvaluationManager:
             model_1_results.append(model_1_reward)
             match_outcomes.append(
                 MatchOutcome.win(1, 2)
-                if model_1_reward == 1 else
+                if model_1_reward > 0 else
                 MatchOutcome.defeat(1, 2))
 
-        n_model_1_wins = (np.array(model_1_results) == 1).sum()
+        n_model_1_wins = (np.array(model_1_results) > 0).sum()
         model_1_win_rate = n_model_1_wins / self.n_evaluations
         return model_1_win_rate, trajectories, match_outcomes
 
@@ -98,9 +98,9 @@ class ParallelEvaluationManager:
             model_1_results.append(model_1_reward)
             match_outcomes.append(
                 MatchOutcome.win(1, 2)
-                if model_1_reward == 1 else
+                if model_1_reward > 0 else
                 MatchOutcome.defeat(1, 2))
 
-        n_model_1_wins = (np.array(model_1_results) == 1).sum()
+        n_model_1_wins = (np.array(model_1_results) > 0).sum()
         model_1_win_rate = n_model_1_wins / self.n_evaluations
         return model_1_win_rate, trajectories, match_outcomes
