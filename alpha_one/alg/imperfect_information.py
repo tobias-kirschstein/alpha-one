@@ -42,7 +42,6 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
     def prior_observation_node(self, information_set_generator: InformationSetGenerator) \
             -> List[Tuple[pyspiel.State, float]]:
 
-        
         information_set = information_set_generator.calculate_information_set()
         state_mask, index_track = get_state_mask(self._state_to_value, information_set)
         
@@ -61,11 +60,10 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         
 
     def evaluate_observation_node(self, information_set_generator: InformationSetGenerator) -> (float, float):
-
-        if information_set_generator.current_player() == -1:
-    	    return [0, 0]
-
         
+        if information_set_generator.current_player() == -1:
+            return [0, 0]
+
         information_set = information_set_generator.calculate_information_set()
         state_mask, _ = get_state_mask(self._state_to_value, information_set)
         

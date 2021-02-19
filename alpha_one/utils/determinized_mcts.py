@@ -46,10 +46,10 @@ def compute_mcts_policy(game, model, state, information_set_generator, mcts_conf
             else:
                 policy[c.action] += c.total_reward / c.explore_count
     
+    policy = (policy - np.min(policy)) / (np.max(policy) - np.min(policy))
     if mcts_config.temperature != 0:
         policy = policy ** (1 / mcts_config.temperature)
-    policy = (policy - np.min(policy)) / (np.max(policy) - np.min(policy))
-    policy[np.where(state.legal_actions_mask() == 0)] = 0
+    policy[np.where(np.array(state.legal_actions_mask()) == 0)] = 0
     policy /= policy.sum()
     return policy
 
