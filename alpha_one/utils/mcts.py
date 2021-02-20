@@ -87,7 +87,7 @@ def compute_mcts_policy(game, root, temperature):
 
 
 def play_one_game(game, bots, temperature, temperature_drop):
-    trajectory = GameTrajectory()
+    trajectory = GameTrajectory(game)
     state = game.new_initial_state()
     current_turn = 0
     while not state.is_terminal():
