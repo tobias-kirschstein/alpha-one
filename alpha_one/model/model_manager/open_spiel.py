@@ -6,6 +6,10 @@ from .base import CheckpointManager, ModelManager
 from ..config import OpenSpielModelConfig
 from ...utils.io import list_file_numbering
 
+import pyspiel
+
+from open_spiel.python.observation import make_observation
+
 
 class OpenSpielModelManager(ModelManager):
 
@@ -31,9 +35,15 @@ class OpenSpielCheckpointManager(CheckpointManager):
         return list_file_numbering(self.model_store_path, "checkpoint", ".index")
 
     def _build_model(self, config: OpenSpielModelConfig):
+        observer = make_observation(
+                                    config.game,
+                                    pyspiel.IIGObservationType(
+                                                                perfect_recall=False,
+                                                                public_info=True,
+                                                                private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
         return model_lib.Model.build_model(
             config.model_type,
-            config.game.observation_tensor_shape(),
+            [observer.tensor.shape[0]],
             config.game.num_distinct_actions(),
             nn_width=config.nn_width,
             nn_depth=config.nn_depth,

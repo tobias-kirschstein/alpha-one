@@ -8,6 +8,7 @@ from open_spiel.python.algorithms.mcts import Evaluator
 from alpha_one.utils.statemask import get_state_mask
 
 from alpha_one.game.information_set import InformationSetGenerator
+from open_spiel.python.observation import make_observation
 
 
 class ImperfectInformationMCTSEvaluator(Evaluator):
@@ -31,13 +32,20 @@ class ImperfectInformationMCTSEvaluator(Evaluator):
 
 class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluator):
     
-    def __init__(self, state_to_value, observation_model, game_model):
+    def __init__(self, game, state_to_value, observation_model, game_model):
 
         self._observation_model = observation_model
     
         self._game_model = game_model
     
         self._state_to_value = state_to_value
+
+        self.observer = make_observation(
+                                        game,
+                                        pyspiel.IIGObservationType(
+                                                                   perfect_recall=False,
+                                                                   public_info=True,
+                                                                   private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
     
     def prior_observation_node(self, information_set_generator: InformationSetGenerator) \
             -> List[Tuple[pyspiel.State, float]]:
@@ -80,7 +88,9 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         if state.is_chance_node():
             return [0, 0]
         
-        obs = np.expand_dims(state.observation_tensor(), 0)
+        # add total information of the state not just private observation after guessing state
+        self.observer.set_from(state, player=state.current_player())
+        obs = np.expand_dims(self.observer.tensor, 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
         
         value, _ = self._game_model.inference(obs, mask)
@@ -96,7 +106,8 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         if state.is_chance_node():
             return state.chance_outcomes()
         
-        obs = np.expand_dims(state.observation_tensor(), 0)
+        self.observer.set_from(state, player=state.current_player())
+        obs = np.expand_dims(self.observer.tensor, 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
         
         _, policy = self._game_model.inference(obs, mask)
@@ -108,9 +119,15 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
 
 class DeterminizedMCTSEvaluator(Evaluator):
     
-    def __init__(self, model):
+    def __init__(self, model, game):
 
         self._model = model
+        self.observer = make_observation(
+                                        game,
+                                        pyspiel.IIGObservationType(
+                                                                   perfect_recall=False,
+                                                                   public_info=True,
+                                                                   private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
 
 
     def evaluate(self, state):
@@ -118,7 +135,8 @@ class DeterminizedMCTSEvaluator(Evaluator):
         if state.is_chance_node():
             return [0, 0]
         
-        obs = np.expand_dims(state.observation_tensor(), 0)
+        self.observer.set_from(state, player=state.current_player())
+        obs = np.expand_dims(self.observer.tensor, 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
         
         value, _ = self._model.inference(obs, mask)
@@ -133,8 +151,9 @@ class DeterminizedMCTSEvaluator(Evaluator):
 
         if state.is_chance_node():
             return state.chance_outcomes()
-
-        obs = np.expand_dims(state.observation_tensor(), 0)
+        
+        self.observer.set_from(state, player=state.current_player())
+        obs = np.expand_dims(self.observer.tensor, 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
         
         _, policy = self._model.inference(obs, mask)

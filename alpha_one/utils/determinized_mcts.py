@@ -15,7 +15,7 @@ def initialize_bot(game, model, mcts_config: MCTSConfig):
     else:
         noise = (mcts_config.policy_epsilon, mcts_config.policy_alpha)
     
-    evaluator = DeterminizedMCTSEvaluator(model)
+    evaluator = DeterminizedMCTSEvaluator(model, game)
 
     bot = mcts.MCTSBot(
           game,
@@ -54,11 +54,11 @@ def compute_mcts_policy(game, model, state, information_set_generator, mcts_conf
     return policy
 
 def play_one_game_d(game, models, mcts_config: MCTSConfig):
-    trajectory = GameTrajectory()
-
+    trajectory = GameTrajectory(game)
+    
     state = game.new_initial_state()
     information_set_generator = InformationSetGenerator(game)
-
+    
     current_turn = 0
 
     while not state.is_terminal():
@@ -78,6 +78,7 @@ def play_one_game_d(game, models, mcts_config: MCTSConfig):
                 action = np.random.choice(len(policy), p=policy)
             else:
                 action = np.argmax(policy)
+
             trajectory.append(state, action, policy)
             information_set_generator.register_action(action)
             state.apply_action(action)
@@ -93,6 +94,7 @@ def play_one_game_d(game, models, mcts_config: MCTSConfig):
                 action = np.random.choice(len(policy), p=policy)
             else:
                 action = np.argmax(policy)
+
             trajectory.append(state, action, policy)
             information_set_generator.register_action(action)
             state.apply_action(action)
