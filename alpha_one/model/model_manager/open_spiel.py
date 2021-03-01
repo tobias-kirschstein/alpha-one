@@ -4,6 +4,7 @@ from open_spiel.python.algorithms.alpha_zero import model as model_lib
 
 from .base import CheckpointManager, ModelManager
 from ..config import OpenSpielModelConfig
+from ...game.observer import OmniscientObserver
 from ...utils.io import list_file_numbering
 
 import pyspiel
@@ -35,15 +36,20 @@ class OpenSpielCheckpointManager(CheckpointManager):
         return list_file_numbering(self.model_store_path, "checkpoint", ".index")
 
     def _build_model(self, config: OpenSpielModelConfig):
-        observer = make_observation(
-                                    config.game,
-                                    pyspiel.IIGObservationType(
-                                                                perfect_recall=False,
-                                                                public_info=True,
-                                                                private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
+        if config.omniscient_observer:
+            observation_tensor_shape = OmniscientObserver(config.game).get_observation_tensor(config.game.new_initial_state()).shape
+        else:
+            observer = make_observation(
+                config.game,
+                pyspiel.IIGObservationType(
+                    perfect_recall=False,
+                    public_info=True,
+                    private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
+            observation_tensor_shape = observer.tensor.shape[0]
+
         return model_lib.Model.build_model(
             config.model_type,
-            [observer.tensor.shape[0]],
+            [observation_tensor_shape],
             config.game.num_distinct_actions(),
             nn_width=config.nn_width,
             nn_depth=config.nn_depth,

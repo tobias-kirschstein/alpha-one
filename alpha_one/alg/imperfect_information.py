@@ -1,14 +1,15 @@
 from abc import abstractmethod
 from typing import List, Tuple
 
-import pyspiel
 import numpy as np
+import pyspiel
 from open_spiel.python.algorithms.mcts import Evaluator
-
-from alpha_one.utils.statemask import get_state_mask
+from open_spiel.python.observation import make_observation
+from open_spiel.python.utils import lru_cache
 
 from alpha_one.game.information_set import InformationSetGenerator
-from open_spiel.python.observation import make_observation
+from alpha_one.game.observer import OmniscientObserver
+from alpha_one.utils.statemask import get_state_mask
 
 
 class ImperfectInformationMCTSEvaluator(Evaluator):
@@ -30,54 +31,54 @@ class ImperfectInformationMCTSEvaluator(Evaluator):
     def evaluate_observation_node(self, information_set_generator: InformationSetGenerator) -> (float, float):
         raise NotImplementedError
 
+
 class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluator):
-    
+
     def __init__(self, game, state_to_value, observation_model, game_model):
 
         self._observation_model = observation_model
-    
+
         self._game_model = game_model
-    
+
         self._state_to_value = state_to_value
 
         self.observer = make_observation(
-                                        game,
-                                        pyspiel.IIGObservationType(
-                                                                   perfect_recall=False,
-                                                                   public_info=True,
-                                                                   private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
-    
+            game,
+            pyspiel.IIGObservationType(
+                perfect_recall=False,
+                public_info=True,
+                private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
+
     def prior_observation_node(self, information_set_generator: InformationSetGenerator) \
             -> List[Tuple[pyspiel.State, float]]:
 
         information_set = information_set_generator.calculate_information_set()
         state_mask, index_track = get_state_mask(self._state_to_value, information_set)
-        
+
         obs = np.expand_dims(state_mask, 0)
         mask = np.expand_dims(state_mask, 0)
-        
+
         _, policy = self._observation_model.inference(obs, mask)
-        
+
         policy = policy[0]
-        
+
         prior = []
         for i in range(len(information_set)):
             prior.append((information_set[i], policy[index_track[i]]))
-            
+
         return prior
-        
 
     def evaluate_observation_node(self, information_set_generator: InformationSetGenerator) -> (float, float):
-        
+
         if information_set_generator.current_player() == -1:
             return [0, 0]
 
         information_set = information_set_generator.calculate_information_set()
         state_mask, _ = get_state_mask(self._state_to_value, information_set)
-        
+
         obs = np.expand_dims(state_mask, 0)
         mask = np.expand_dims(state_mask, 0)
-        
+
         value, _ = self._observation_model.inference(obs, mask)
         value = value[0, 0]
 
@@ -87,81 +88,75 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
 
         if state.is_chance_node():
             return [0, 0]
-        
+
         # add total information of the state not just private observation after guessing state
         self.observer.set_from(state, player=state.current_player())
         obs = np.expand_dims(self.observer.tensor, 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
-        
+
         value, _ = self._game_model.inference(obs, mask)
-        
+
         value = value[0, 0]
 
         return [value, -value]
-        
-        
 
     def prior(self, state):
-        
+
         if state.is_chance_node():
             return state.chance_outcomes()
-        
+
         self.observer.set_from(state, player=state.current_player())
         obs = np.expand_dims(self.observer.tensor, 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
-        
+
         _, policy = self._game_model.inference(obs, mask)
-        
+
         policy = policy[0]
-        
+
         return [(action, policy[action]) for action in state.legal_actions()]
 
 
 class DeterminizedMCTSEvaluator(Evaluator):
-    
+
     def __init__(self, model, game):
 
         self._model = model
         self.observer = make_observation(
-                                        game,
-                                        pyspiel.IIGObservationType(
-                                                                   perfect_recall=False,
-                                                                   public_info=True,
-                                                                   private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
-
+            game,
+            pyspiel.IIGObservationType(
+                perfect_recall=False,
+                public_info=True,
+                private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
 
     def evaluate(self, state):
 
         if state.is_chance_node():
             return [0, 0]
-        
+
         self.observer.set_from(state, player=state.current_player())
         obs = np.expand_dims(self.observer.tensor, 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
-        
+
         value, _ = self._model.inference(obs, mask)
-        
+
         value = value[0, 0]
 
         return [value, -value]
-        
-        
 
     def prior(self, state):
 
         if state.is_chance_node():
             return state.chance_outcomes()
-        
+
         self.observer.set_from(state, player=state.current_player())
         obs = np.expand_dims(self.observer.tensor, 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
-        
-        _, policy = self._model.inference(obs, mask)
-        
-        policy = policy[0]
-        
-        return [(action, policy[action]) for action in state.legal_actions()]
 
+        _, policy = self._model.inference(obs, mask)
+
+        policy = policy[0]
+
+        return [(action, policy[action]) for action in state.legal_actions()]
 
 
 class BasicImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluator):
@@ -187,3 +182,67 @@ class BasicImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluator):
         else:
             legal_actions = state.legal_actions(state.current_player())
             return [(action, 1.0 / len(legal_actions)) for action in legal_actions]
+
+
+class BasicOmniscientMCTSEvaluator(Evaluator):
+
+    def __init__(self, game):
+        self._observer = OmniscientObserver(game)
+
+    def evaluate(self, state):
+        return np.array([0, 0])
+
+    def prior(self, state):
+        if state.is_chance_node():
+            return state.chance_outcomes()
+        else:
+            legal_actions = state.legal_actions(state.current_player())
+            return [(action, 1.0 / len(legal_actions)) for action in legal_actions]
+
+
+class AlphaZeroOmniscientMCTSEvaluator(Evaluator):
+
+    def __init__(self, game, model, cache_size=2 ** 16):
+        """An AlphaZero MCTS Evaluator."""
+        if game.num_players() != 2:
+            raise ValueError("Game must be for two players.")
+        game_type = game.get_type()
+        if game_type.reward_model != pyspiel.GameType.RewardModel.TERMINAL:
+            raise ValueError("Game must have terminal rewards.")
+        if game_type.dynamics != pyspiel.GameType.Dynamics.SEQUENTIAL:
+            raise ValueError("Game must have sequential turns.")
+        # if game_type.chance_mode != pyspiel.GameType.ChanceMode.DETERMINISTIC:
+        #     raise ValueError("Game must be deterministic.")
+
+        self._model = model
+        self._cache = lru_cache.LRUCache(cache_size)
+        self._observer = OmniscientObserver(game)
+
+    def _inference(self, state):
+        # Make a singleton batch
+        obs = np.expand_dims(self._observer.get_observation_tensor(state), 0)
+        mask = np.expand_dims(state.legal_actions_mask(), 0)
+
+        # ndarray isn't hashable
+        cache_key = obs.tobytes() + mask.tobytes()
+
+        value, policy = self._cache.make(
+            cache_key, lambda: self._model.inference(obs, mask))
+
+        return value[0, 0], policy[0]  # Unpack batch
+
+    def evaluate(self, state):
+        """Returns a value for the given state."""
+        if state.is_chance_node():
+            return [0, 0]
+
+        value, _ = self._inference(state)
+        return np.array([value, -value])
+
+    def prior(self, state):
+        """Returns the probabilities for all actions."""
+        if state.is_chance_node():
+            return state.chance_outcomes()
+
+        _, policy = self._inference(state)
+        return [(action, policy[action]) for action in state.legal_actions()]

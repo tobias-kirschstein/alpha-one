@@ -9,24 +9,26 @@ import ray
 
 
 def _compare_models(game, model_1, model_2, mcts_config: MCTSConfig, player_id_model_1):
-
     if mcts_config.imperfect_info:
-        models = [model_1, model_2] if player_id_model_1 == 0  else [model_2, model_1]
+        models = [model_1, model_2] if player_id_model_1 == 0 else [model_2, model_1]
         return play_one_game_d(game, models, mcts_config)
 
     mcts_bot_model_1 = initialize_bot(game, model_1, mcts_config.uct_c,
                                       mcts_config.max_mcts_simulations,
-                                      mcts_config.policy_epsilon, mcts_config.policy_alpha)
-    
+                                      mcts_config.policy_epsilon, mcts_config.policy_alpha,
+                                      omniscient_observer=mcts_config.omniscient_observer)
+
     mcts_bot_model_2 = initialize_bot(game, model_2, mcts_config.uct_c,
                                       mcts_config.max_mcts_simulations,
-                                      mcts_config.policy_epsilon, mcts_config.policy_alpha)
+                                      mcts_config.policy_epsilon, mcts_config.policy_alpha,
+                                      omniscient_observer=mcts_config.omniscient_observer)
 
     bots = [mcts_bot_model_1, mcts_bot_model_2] \
         if player_id_model_1 == 0 \
         else [mcts_bot_model_2, mcts_bot_model_1]
 
-    return play_one_game(game, bots, mcts_config.temperature, mcts_config.temperature_drop)
+    return play_one_game(game, bots, mcts_config.temperature, mcts_config.temperature_drop,
+                         omniscient_observer=mcts_config.omniscient_observer)
 
 
 @ray.remote(num_returns=1)

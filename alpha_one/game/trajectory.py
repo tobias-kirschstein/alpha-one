@@ -1,6 +1,8 @@
 from open_spiel.python.observation import make_observation
 import pyspiel
 
+from alpha_one.game.observer import OmniscientObserver
+
 
 class TrajectoryState(object):
 
@@ -15,20 +17,29 @@ class TrajectoryState(object):
 
 class GameTrajectory(object):
     # A sequence of observations, actions and policies, and the outcomes.
-    def __init__(self, game):
+    def __init__(self, game, omniscient_observer=False):
         self.states = []
         self.returns = None
-        self.observer = make_observation(
-                                        game,
-                                        pyspiel.IIGObservationType(
-                                                                  perfect_recall=False,
-                                                                  public_info=True,
-                                                                  private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
+        self.omniscient_observer = omniscient_observer
+        if omniscient_observer:
+            self.observer = OmniscientObserver(game)
+        else:
+            self.observer = make_observation(
+                                            game,
+                                            pyspiel.IIGObservationType(
+                                                                      perfect_recall=False,
+                                                                      public_info=True,
+                                                                      private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
 
     def append(self, game_state, action, policy):
-        self.observer.set_from(game_state, game_state.current_player())
+        if self.omniscient_observer:
+            observation_tensor = self.observer.get_observation_tensor(game_state)
+        else:
+            self.observer.set_from(game_state, game_state.current_player())
+            observation_tensor = self.observer.tensor
+
         self.states.append(TrajectoryState(
-            self.observer.tensor,
+            observation_tensor,
             game_state.current_player(),
             game_state.legal_actions_mask(),
             action,

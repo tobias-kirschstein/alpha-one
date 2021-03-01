@@ -43,16 +43,16 @@ def _generate_one_game_parallel(game, checkpoint_manager: CheckpointManager, mct
 
 
 def _generate_one_game(game, model_current_best, mcts_config: MCTSConfig):
-
     if mcts_config.imperfect_info:
         trajectory = play_one_game_d(game, [model_current_best, model_current_best], mcts_config)
 
     else:
         bot = initialize_bot(game, model_current_best, mcts_config.uct_c,
-                         mcts_config.max_mcts_simulations, mcts_config.policy_epsilon,
-                         mcts_config.policy_alpha)
+                             mcts_config.max_mcts_simulations, mcts_config.policy_epsilon,
+                             mcts_config.policy_alpha, omniscient_observer=mcts_config.omniscient_observer)
 
-        trajectory = play_one_game(game, [bot, bot], mcts_config.temperature, mcts_config.temperature_drop)
+        trajectory = play_one_game(game, [bot, bot], mcts_config.temperature, mcts_config.temperature_drop,
+                                   omniscient_observer=mcts_config.omniscient_observer)
 
     p1_outcome = trajectory.get_final_reward(0)
     new_states = [model_lib.TrainInput(s.observation, s.legals_mask, s.policy, value=p1_outcome)
