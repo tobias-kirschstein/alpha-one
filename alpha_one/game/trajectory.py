@@ -18,25 +18,40 @@ class TrajectoryState(object):
 class GameTrajectory(object):
     # A sequence of observations, actions and policies, and the outcomes.
     def __init__(self, game, omniscient_observer=False):
+        """
+        Parameters
+        ----------
+        omniscient_observer:
+            If set, the game trajectory will contain both the current player's single observation as well as the
+            omniscient observation.
+        """
+
         self.states = []
         self.returns = None
-        self.omniscient_observer = omniscient_observer
+
         if omniscient_observer:
-            self.observer = OmniscientObserver(game)
+            self.omniscient_observer = OmniscientObserver(game)
         else:
-            self.observer = make_observation(
-                                            game,
-                                            pyspiel.IIGObservationType(
-                                                                      perfect_recall=False,
-                                                                      public_info=True,
-                                                                      private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
+            self.omniscient_observer = None
+
+        # TODO: let the observer have perfect recall? I.e., contain information about all past decisions of player?
+        self.observer = make_observation(
+            game,
+            pyspiel.IIGObservationType(
+                perfect_recall=False,
+                public_info=True,
+                private_info=pyspiel.PrivateInfoType.SINGLE_PLAYER))
 
     def append(self, game_state, action, policy):
-        if self.omniscient_observer:
-            observation_tensor = self.observer.get_observation_tensor(game_state)
+        self.observer.set_from(game_state, game_state.current_player())
+        player_observation_tensor = self.observer.tensor
+
+        if self.omniscient_observer is not None:
+            omniscient_observation_tensor = self.omniscient_observer.get_observation_tensor(game_state)
+            observation_tensor = {'player_observation': player_observation_tensor,
+                                  'omniscient_observation': omniscient_observation_tensor}
         else:
-            self.observer.set_from(game_state, game_state.current_player())
-            observation_tensor = self.observer.tensor
+            observation_tensor = player_observation_tensor
 
         self.states.append(TrajectoryState(
             observation_tensor,

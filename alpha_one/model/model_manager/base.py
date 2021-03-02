@@ -48,7 +48,7 @@ class CheckpointManager(ABC):
 
     def load_config(self, **kwargs):
         return load_pickled(f"{self.model_store_path}/config")
-    
+
     def get_run_name(self):
         return self.run_name
 
@@ -70,6 +70,6 @@ class ModelManager:
 
     def new_run(self):
         return self.cls_checkpoint_manager(self.model_dir, self.generate_run_name())
-    
+
     def get_checkpoint_manager(self, run_name):
         return self.cls_checkpoint_manager(self.model_dir, run_name)

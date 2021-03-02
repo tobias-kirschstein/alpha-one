@@ -18,7 +18,7 @@ class MCTSConfig(ModelConfig):
                  policy_epsilon: float = None,
                  policy_alpha: float = None,
                  imperfect_info: bool = False,
-                 omniscient_observer: bool=False):
+                 omniscient_observer: bool = False):
         super(MCTSConfig, self).__init__(
             uct_c=uct_c,
             max_mcts_simulations=max_mcts_simulations,
@@ -31,7 +31,8 @@ class MCTSConfig(ModelConfig):
         )
 
 
-def initialize_bot(game, model, uct_c, max_simulations, policy_epsilon=None, policy_alpha=None, omniscient_observer=False):
+def initialize_bot(game, model, uct_c, max_simulations, policy_epsilon=None, policy_alpha=None,
+                   omniscient_observer=False):
     if policy_epsilon is None or policy_alpha is None:
         noise = None
     else:
@@ -130,3 +131,11 @@ def mcts_inference(game, model, state, uct_c, max_simulations, temperature, poli
                          policy_alpha=policy_alpha)
     root = bot.mcts_search(state)
     return compute_mcts_policy(game, root, temperature)
+
+
+def investigate_node(node, level=0, uct_c=2):
+    for s1 in node.children:
+        print(''.join(['  '] * (level + 1)),
+              f"p{s1.player}, {s1.action}, explore: {s1.explore_count}, reward: {s1.total_reward: 0.2f}"
+              f", puct {s1.puct_value(s1.explore_count, uct_c):0.3f}")
+        investigate_node(s1, level=level + 2)

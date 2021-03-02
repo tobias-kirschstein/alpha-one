@@ -33,3 +33,35 @@ class OmniscientObserver:
         else:
             self.observer.set_from(state, 0)
             return self.observer.tensor
+
+
+def get_observation_tensor_shape(game: pyspiel.Game, omniscient_observer=False):
+    """
+    Calculates the shape of the tensor that will be fed into a NN.
+    Usually, this is just the shape of the player's observation tensor, but if omniscient_observer is specified,
+    it will be the shape of this larger tensor instead.
+
+    Parameters
+    ----------
+    game
+    omniscient_observer:
+        whether to use the shape of the larger omniscient observation tensor instead of the single player's private
+        observation tensor.
+
+    Returns
+    -------
+        the shape of the respective observation tensor
+    """
+
+    if omniscient_observer:
+        observation_tensor_shape = OmniscientObserver(game).get_observation_tensor(
+            game.new_initial_state()).shape
+    else:
+        observer = make_observation(
+            game,
+            pyspiel.IIGObservationType(
+                perfect_recall=False,
+                public_info=True,
+                private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
+        observation_tensor_shape = observer.tensor.shape[0]
+    return observation_tensor_shape

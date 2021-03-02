@@ -6,6 +6,7 @@ class OpenSpielModelConfig(ModelConfig):
     def __init__(self,
                  game,
                  model_type: str,
+                 input_shape: list,
                  nn_width: int,
                  nn_depth: int,
                  weight_decay: float,
@@ -14,6 +15,7 @@ class OpenSpielModelConfig(ModelConfig):
         super(OpenSpielModelConfig, self).__init__(
             game=game,
             model_type=model_type,
+            input_shape=input_shape,
             nn_width=nn_width,
             nn_depth=nn_depth,
             weight_decay=weight_decay,

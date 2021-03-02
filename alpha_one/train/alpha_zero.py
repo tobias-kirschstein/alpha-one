@@ -55,6 +55,11 @@ def _generate_one_game(game, model_current_best, mcts_config: MCTSConfig):
                                    omniscient_observer=mcts_config.omniscient_observer)
 
     p1_outcome = trajectory.get_final_reward(0)
+    if mcts_config.omniscient_observer:
+        pass
+        # TODO: assemble observation histories? Currently, the player observation only contains the observation of the
+        # current game state
+
     new_states = [model_lib.TrainInput(s.observation, s.legals_mask, s.policy, value=p1_outcome)
                   for s in trajectory.states]
     return new_states
@@ -87,6 +92,7 @@ class AlphaZeroTrainManager:
         self.use_parallelism = ray.is_initialized()
         if self.use_parallelism:
             print("AlphaZero Train manager will use parallelism")
+        self.omniscient_observer = checkpoint_manager.load_config().omniscient_observer
 
     def generate_training_data(self, n_games_train: int, n_games_valid: int, mcts_config: MCTSConfig):
         train_samples = []
@@ -133,11 +139,14 @@ class AlphaZeroTrainManager:
         valid_losses = []
 
         for _ in range(n_train_steps):
-            loss = self.model_challenger.update(self.replay_buffer.sample(batch_size))
+            sampled_train_inputs = self.replay_buffer.sample(batch_size,
+                                                             'omniscient_observation' if self.omniscient_observer else None)
+            loss = self.model_challenger.update(sampled_train_inputs)
             train_losses.append(loss)
 
         for _ in range(n_valid_steps):
-            valid_samples = self.replay_buffer_valid.sample(batch_size)
+            valid_samples = self.replay_buffer_valid.sample(batch_size,
+                                                            'omniscient_observation' if self.omniscient_observer else None)
 
             values, policies = self.model_challenger.inference(
                 [valid_sample.observation for valid_sample in valid_samples],
