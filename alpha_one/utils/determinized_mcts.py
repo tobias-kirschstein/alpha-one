@@ -46,15 +46,16 @@ def compute_mcts_policy(game, model, state, information_set_generator, mcts_conf
             else:
                 policy[c.action] += c.total_reward / c.explore_count
     
-    policy = (policy - np.min(policy)) / (np.max(policy) - np.min(policy))
     if mcts_config.temperature != 0:
         policy = policy ** (1 / mcts_config.temperature)
+    
+    policy = np.exp(policy)
     policy[np.where(np.array(state.legal_actions_mask()) == 0)] = 0
-    policy /= policy.sum()
+    policy = policy / policy.sum()
     return policy
 
 def play_one_game_d(game, models, mcts_config: MCTSConfig):
-    trajectory = GameTrajectory(game)
+    trajectory = GameTrajectory(game, omniscient_observer=mcts_config.omniscient_observer)
     
     state = game.new_initial_state()
     information_set_generator = InformationSetGenerator(game)

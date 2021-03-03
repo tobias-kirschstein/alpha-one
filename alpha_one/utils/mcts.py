@@ -17,8 +17,10 @@ class MCTSConfig(ModelConfig):
                  temperature_drop: int = None,
                  policy_epsilon: float = None,
                  policy_alpha: float = None,
-                 imperfect_info: bool = False,
-                 omniscient_observer: bool = False):
+                 determinized_MCTS: bool = False,
+                 alpha_one: bool = False,
+                 omniscient_observer: bool = False,
+                 state_to_value = None):
         super(MCTSConfig, self).__init__(
             uct_c=uct_c,
             max_mcts_simulations=max_mcts_simulations,
@@ -26,8 +28,10 @@ class MCTSConfig(ModelConfig):
             temperature_drop=temperature_drop,
             policy_epsilon=policy_epsilon,
             policy_alpha=policy_alpha,
-            imperfect_info=imperfect_info,
-            omniscient_observer=omniscient_observer
+            determinized_MCTS=determinized_MCTS,
+            alpha_one=alpha_one,
+            omniscient_observer=omniscient_observer,
+            state_to_value = state_to_value
         )
 
 

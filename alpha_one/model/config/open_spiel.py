@@ -11,6 +11,7 @@ class OpenSpielModelConfig(ModelConfig):
                  nn_depth: int,
                  weight_decay: float,
                  learning_rate: float,
+                 output_shape: int = None,
                  omniscient_observer: bool = False):
         super(OpenSpielModelConfig, self).__init__(
             game=game,
@@ -20,4 +21,5 @@ class OpenSpielModelConfig(ModelConfig):
             nn_depth=nn_depth,
             weight_decay=weight_decay,
             learning_rate=learning_rate,
+            output_shape=output_shape,
             omniscient_observer=omniscient_observer)

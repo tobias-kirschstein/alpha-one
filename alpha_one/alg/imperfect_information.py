@@ -42,15 +42,14 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
 
         self._state_to_value = state_to_value
 
-        self.observer = make_observation(
-            game,
-            pyspiel.IIGObservationType(
-                perfect_recall=False,
-                public_info=True,
-                private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
+        self._observer = OmniscientObserver(game)
 
     def prior_observation_node(self, information_set_generator: InformationSetGenerator) \
             -> List[Tuple[pyspiel.State, float]]:
+
+        if information_set_generator.current_player() == -1:
+            information_set = information_set_generator.calculate_information_set()
+            return [(state, 1.0 / len(information_set)) for state in information_set]
 
         information_set = information_set_generator.calculate_information_set()
         state_mask, index_track = get_state_mask(self._state_to_value, information_set)
@@ -90,8 +89,7 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
             return [0, 0]
 
         # add total information of the state not just private observation after guessing state
-        self.observer.set_from(state, player=state.current_player())
-        obs = np.expand_dims(self.observer.tensor, 0)
+        obs = np.expand_dims(self._observer.get_observation_tensor(state), 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
 
         value, _ = self._game_model.inference(obs, mask)
@@ -105,8 +103,7 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
         if state.is_chance_node():
             return state.chance_outcomes()
 
-        self.observer.set_from(state, player=state.current_player())
-        obs = np.expand_dims(self.observer.tensor, 0)
+        obs = np.expand_dims(self._observer.get_observation_tensor(state), 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
 
         _, policy = self._game_model.inference(obs, mask)
@@ -121,20 +118,14 @@ class DeterminizedMCTSEvaluator(Evaluator):
     def __init__(self, model, game):
 
         self._model = model
-        self.observer = make_observation(
-            game,
-            pyspiel.IIGObservationType(
-                perfect_recall=False,
-                public_info=True,
-                private_info=pyspiel.PrivateInfoType.ALL_PLAYERS))
+        self._observer = OmniscientObserver(game)
 
     def evaluate(self, state):
 
         if state.is_chance_node():
             return [0, 0]
 
-        self.observer.set_from(state, player=state.current_player())
-        obs = np.expand_dims(self.observer.tensor, 0)
+        obs = np.expand_dims(self._observer.get_observation_tensor(state), 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
 
         value, _ = self._model.inference(obs, mask)
@@ -148,8 +139,7 @@ class DeterminizedMCTSEvaluator(Evaluator):
         if state.is_chance_node():
             return state.chance_outcomes()
 
-        self.observer.set_from(state, player=state.current_player())
-        obs = np.expand_dims(self.observer.tensor, 0)
+        obs = np.expand_dims(self._observer.get_observation_tensor(state), 0)
         mask = np.expand_dims(state.legal_actions_mask(), 0)
 
         _, policy = self._model.inference(obs, mask)
