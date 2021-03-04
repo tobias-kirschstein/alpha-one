@@ -14,7 +14,7 @@ class InformationSetGenerator:
         self.game = game
         self.action_history = defaultdict(list)
         self.observation_history = defaultdict(list)
-        self.observation_buffer = defaultdict(list)
+        self._observation_buffer = defaultdict(list)
         self.previous_information_set = dict()
 
         if hasattr(game, 'make_observer') or hasattr(game, 'make_py_observer'):
@@ -60,14 +60,19 @@ class InformationSetGenerator:
         clone = InformationSetGenerator(self.game)
         clone.action_history = defaultdict(list)
         clone.observation_history = defaultdict(list)
+        clone._observation_buffer = defaultdict(list)
         for player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}:
             if player_id in self.action_history:
                 clone.action_history[player_id] = [action for action in self.action_history[player_id]]
-            if player_id in self.observation_history:
-                clone.observation_history[player_id] = [
+            if player_id in self._observation_buffer:
+                clone._observation_buffer[player_id] = [
                     np.array(observation) if isinstance(observation, np.ndarray) else observation
                     for observation in
-                    self.observation_history[player_id]]
+                    self._observation_buffer[player_id]]
+
+            clone.observation_history[player_id] = [
+                [np.array(observation) for observation in self.observation_history[player_id]]
+            ]
         clone.previous_information_set = {
             player_id: [state.clone() for state in self.previous_information_set[player_id]]
             for player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}
@@ -81,17 +86,21 @@ class InformationSetGenerator:
         self.action_history[player_id].append(action)
 
     def register_observation(self, state: pyspiel.State):
-        self.observation_history[0].append(self._get_observation(state, 0))
-        self.observation_history[1].append(self._get_observation(state, 1))
+        observation_player_1 = self._get_observation(state, 0)
+        observation_player_2 = self._get_observation(state, 1)
 
-        self.observation_buffer[0].append(self._get_observation(state, 0))
-        self.observation_buffer[1].append(self._get_observation(state, 1))
+        self.observation_history[0].append(observation_player_1)
+        self._observation_buffer[0].append(observation_player_1)
+
+        self.observation_history[1].append(observation_player_2)
+        self._observation_buffer[1].append(observation_player_2)
 
         self.calculate_information_set(0)
         self.calculate_information_set(1)
 
         if self._public_observer is not None:
             public_observation = self._get_observation(state, PUBLIC_OBSERVER_PLAYER_ID)
+            self._observation_buffer[PUBLIC_OBSERVER_PLAYER_ID].append(public_observation)
             self.observation_history[PUBLIC_OBSERVER_PLAYER_ID].append(public_observation)
             self.calculate_information_set(PUBLIC_OBSERVER_PLAYER_ID)
 
@@ -117,6 +126,11 @@ class InformationSetGenerator:
     def current_player(self):
         return self._current_player
 
+    def get_observation_history(self, player_id: int = None) -> List[np.ndarray]:
+        player_id = self.current_player() if player_id is None else player_id
+        assert player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}, f"Invalid player id {player_id}"
+        return self.observation_history[player_id]
+
     def calculate_information_set(self, player_id: int = None) -> List[pyspiel.State]:
         if player_id is None:
             player_id = self.current_player()
@@ -127,16 +141,16 @@ class InformationSetGenerator:
             previous_information_set = [self.game.new_initial_state()]
         else:
             previous_information_set = self.previous_information_set[player_id]
-        if len(self.action_history[player_id]) == 0 and len(self.observation_history[player_id]) == 0:
+        if len(self.action_history[player_id]) == 0 and len(self._observation_buffer[player_id]) == 0:
             # We don't have any new information
             return previous_information_set
         information_set = self._calculate_information_set(previous_information_set,
                                                           player_id,
-                                                          self.observation_history[player_id],
+                                                          self._observation_buffer[player_id],
                                                           self.action_history[player_id])
         self.previous_information_set[player_id] = information_set
         self.action_history[player_id] = []
-        self.observation_history[player_id] = []
+        self._observation_buffer[player_id] = []
         return information_set
 
     def get_public_information_set(self):

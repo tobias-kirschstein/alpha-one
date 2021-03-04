@@ -4,7 +4,6 @@ from typing import List, Tuple
 import numpy as np
 import pyspiel
 from open_spiel.python.algorithms.mcts import Evaluator
-from open_spiel.python.observation import make_observation
 from open_spiel.python.utils import lru_cache
 
 from alpha_one.game.information_set import InformationSetGenerator
