@@ -1,4 +1,5 @@
 import numpy as np
+import pyspiel
 from open_spiel.python.algorithms import mcts
 from open_spiel.python.algorithms.alpha_zero import evaluator as evaluator_lib
 from open_spiel.python.algorithms.mcts import RandomRolloutEvaluator
@@ -18,7 +19,8 @@ class MCTSConfig(ModelConfig):
                  policy_epsilon: float = None,
                  policy_alpha: float = None,
                  imperfect_info: bool = False,
-                 omniscient_observer: bool = False):
+                 omniscient_observer: bool = False,
+                 use_reward_policy: bool = False):
         super(MCTSConfig, self).__init__(
             uct_c=uct_c,
             max_mcts_simulations=max_mcts_simulations,
@@ -27,7 +29,8 @@ class MCTSConfig(ModelConfig):
             policy_epsilon=policy_epsilon,
             policy_alpha=policy_alpha,
             imperfect_info=imperfect_info,
-            omniscient_observer=omniscient_observer
+            omniscient_observer=omniscient_observer,
+            use_reward_policy=use_reward_policy
         )
 
 
@@ -93,7 +96,35 @@ def compute_mcts_policy(game, root, temperature):
     return policy
 
 
-def play_one_game(game, bots, temperature, temperature_drop, omniscient_observer=False):
+def compute_mcts_policy_reward(game, state, root, temperature=1):
+    if state.is_chance_node():
+        policy = np.zeros(game.max_chance_outcomes())
+    else:
+        policy = np.zeros(game.num_distinct_actions())
+
+    for c in root.children:
+        if c.explore_count > 0:
+            if c.outcome is not None or c.explore_count == 1:
+                policy[c.action] = c.total_reward / c.explore_count
+            else:
+                # If node is not a leaf, one explore count is used to unfold it. To get a proper average,
+                # we have to subtract that here
+                policy[c.action] = c.total_reward / (c.explore_count - 1)
+
+    if temperature == 0 or temperature is None:
+        new_policy = np.zeros(game.num_distinct_actions())
+        new_policy[policy.argmax(-1)] = 1
+        policy = new_policy
+    else:
+        policy = policy ** (1 / temperature)
+        # TODO: Don't normalize but return raw policy scores?
+        policy_exp = np.exp(policy, where=state.legal_actions_mask())
+        policy = policy_exp / np.sum(policy_exp)
+
+    return policy
+
+
+def play_one_game(game, bots, temperature, temperature_drop, omniscient_observer=False, use_reward_policy=False):
     trajectory = GameTrajectory(game, omniscient_observer=omniscient_observer)
     state = game.new_initial_state()
     current_turn = 0
@@ -106,16 +137,28 @@ def play_one_game(game, bots, temperature, temperature_drop, omniscient_observer
             root = bots[state.current_player()].mcts_search(state)
 
             if not temperature_drop or current_turn < temperature_drop:
-                policy = compute_mcts_policy(game, root, temperature)
+                current_temperature = temperature
             else:
-                policy = compute_mcts_policy(game, root, 0)
+                current_temperature = 0
+
+            if use_reward_policy:
+                policy = compute_mcts_policy_reward(game, state, root, current_temperature)
+            else:
+                policy = compute_mcts_policy(game, root, temperature)
 
         action = np.random.choice(len(policy), p=policy)
 
         if not state.is_chance_node():
             # TODO: consider whether chance player actions should be recorded as well and filtered out later
             trajectory.append(state, action, policy)
-        state.apply_action(action)
+        try:
+            state.apply_action(action)
+        except pyspiel.SpielError as e:
+            print(policy)
+            print(action)
+            print(state.legal_actions_mask())
+            raise e
+
         current_turn += 1
 
     trajectory.set_final_rewards(state.returns())
@@ -137,5 +180,5 @@ def investigate_node(node, level=0, uct_c=2):
     for s1 in node.children:
         print(''.join(['  '] * (level + 1)),
               f"p{s1.player}, {s1.action}, explore: {s1.explore_count}, reward: {s1.total_reward: 0.2f}"
-              f", puct {s1.puct_value(s1.explore_count, uct_c):0.3f}")
+              f", puct {s1.puct_value(node.explore_count, uct_c):0.3f}, outcome: {s1.outcome}")
         investigate_node(s1, level=level + 2)

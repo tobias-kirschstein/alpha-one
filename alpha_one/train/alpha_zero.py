@@ -52,9 +52,12 @@ def _generate_one_game(game, model_current_best, mcts_config: MCTSConfig):
                              mcts_config.policy_alpha, omniscient_observer=mcts_config.omniscient_observer)
 
         trajectory = play_one_game(game, [bot, bot], mcts_config.temperature, mcts_config.temperature_drop,
-                                   omniscient_observer=mcts_config.omniscient_observer)
+                                   omniscient_observer=mcts_config.omniscient_observer,
+                                   use_reward_policy=mcts_config.use_reward_policy)
 
     p1_outcome = trajectory.get_final_reward(0)
+    # Squeeze target value (rewards) into [-1, 1], as value head typically has a tanh activation function
+    p1_outcome = p1_outcome / game.max_utility() if p1_outcome > 0 else p1_outcome / -game.min_utility()
     if mcts_config.omniscient_observer:
         pass
         # TODO: assemble observation histories? Currently, the player observation only contains the observation of the

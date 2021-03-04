@@ -34,6 +34,14 @@ class OmniscientObserver:
             self.observer.set_from(state, 0)
             return self.observer.tensor
 
+    def get_observation_string(self, state):
+        if self.is_game_without_all_players_implementation:
+            observation_strings = [self.observer.string_from(state, player_id) for player_id in
+                                   range(self.game.num_players())]
+            return '\n'.join(observation_strings)
+        else:
+            return self.observer.string_from(state, 0)
+
 
 def get_observation_tensor_shape(game: pyspiel.Game, omniscient_observer=False):
     """

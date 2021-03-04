@@ -93,6 +93,19 @@ class InformationSetGenerator:
 
         self._current_player = state.current_player()
 
+    def register_chance_player_action(self, action: int):
+        assert self.current_player() == -1, f"Can only register chance player action when it is chance player's turn (not player {self.current_player()})"
+        for player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}:
+            information_set = []
+            for state in self.previous_information_set[player_id]:
+                if action in state.legal_actions():
+                    state.apply_action(action)
+                    information_set.append(state)
+            self.previous_information_set[player_id] = information_set
+            assert all([state.current_player() == information_set[0].current_player() for state in
+                        information_set]), f"All nodes in information set have to belong to same player!, {[(str(s), s.current_player()) for s in information_set]}"
+        self._current_player = information_set[0].current_player()
+
     def register(self, state: pyspiel.State, action: int):
         self.register_action(action)
         self.register_observation(state)

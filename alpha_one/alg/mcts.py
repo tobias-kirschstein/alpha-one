@@ -1,11 +1,10 @@
-import time
-
 import numpy as np
 import pyspiel
 from open_spiel.python.algorithms.mcts import SearchNode
 
 from alpha_one.alg.imperfect_information import ImperfectInformationMCTSEvaluator
 from alpha_one.game.information_set import InformationSetGenerator
+from alpha_one.game.observer import OmniscientObserver
 
 
 class ImperfectInformationSearchNode(SearchNode):
@@ -124,15 +123,19 @@ class ImperfectInformationSearchNode(SearchNode):
 
         for s1 in self.children:
             if len(s1.children) > 0:
-                print(''.join(['  '] * level),
-                      f"Player {self.get_deciding_player()} guess action {s1.state.observation_string(1 - self.get_deciding_player())}, explore: {s1.explore_count}, reward: {s1.total_reward: 0.3f}, actual reward: {s1.actual_reward}, actual_outcome: {s1.actual_outcome}")
+                if self.get_deciding_player() >= 0:
+                    omniscient_observer = OmniscientObserver(s1.state.get_game())
+                    observation = omniscient_observer.get_observation_string(s1.state)
+                    # observation = s1.state.observation_string(1 - self.get_deciding_player())
+                    print(''.join(['  '] * level),
+                          f"Player {self.get_deciding_player()} guess action {observation}, explore: {s1.explore_count}, reward: {s1.total_reward: 0.3f}, actual reward: {s1.actual_reward}, actual_outcome: {s1.actual_outcome}")
                 for s2 in s1.children:
                     print(''.join(['  '] * (level + 1)),
-                          f"p{s2.player}, s2.action, explore: {s2.explore_count}, reward: {s2.total_reward: 0.2f}, actual reward: {s2.actual_reward:0.2f}",
+                          f"p{s2.player}, {s2.action}, explore: {s2.explore_count}, reward: {s2.total_reward: 0.2f}, actual reward: {s2.actual_reward:0.2f}",
 
                           np.array(s2.actual_outcome).mean(axis=0) if s2.actual_outcome else s2.actual_outcome,
                           f", puct {self.puct_value(s1.explore_count, 3):0.3f}")
-                    s2.investigate(level=2)
+                    s2.investigate(level=level + 2)
             else:
                 print(''.join(['  '] * level), 'orphan node', s1)
 
@@ -148,6 +151,7 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
                  uct_c: float,
                  max_simulations: int,
                  evaluator: ImperfectInformationMCTSEvaluator,
+                 optimism: float = 1.0,
                  solve=True,
                  random_state=None,
                  child_selection_fn=SearchNode.puct_value,
@@ -161,6 +165,10 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
           max_simulations: How many iterations of MCTS to perform. Each simulation
             will result in two calls to the evaluator (one for Opponent Model Tree and for Root Player Model Tree).
           evaluator: A `Evaluator` object to use to evaluate a leaf node.
+          optimism: value in (0, 1]. How optimistic the bot is when guessing.
+                    1 means the bot is biased towards guessing states that are beneficial for the player
+                    small values (close to 0, but not 0!) mean that the bot more or less guessing according to its
+                    prior distribution of the information set states.
           solve: Whether to back up solved states.
           random_state: An optional numpy RandomState to make it deterministic.
           child_selection_fn: A function to select the child in the descent phase.
@@ -184,6 +192,7 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
 
         self._game = game
         self.uct_c = uct_c
+        self.optimism = optimism
         self.max_simulations = max_simulations
         self.evaluator = evaluator
         self.verbose = verbose
@@ -246,85 +255,26 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
             running_node = current_node_root if current_node_opponent.is_terminal() else current_node_opponent
 
             # =========================================================================
-            # Game Tree Nodes: Choose an action. Happens directly after a state was guesed
+            # Game Tree Nodes: Choose an action. Happens directly after a state was guessed
             # =========================================================================
 
             if running_node.is_game_tree_node():
+                if self.verbose:
+                    print('game tree node')
 
                 # -------------------------------------------------------------------------
                 # Opponent Modeling (Choosing action)
                 # -------------------------------------------------------------------------
 
                 if not current_node_opponent.is_terminal():
-                    if self.verbose:
-                        print('game tree node')
-
-                    state = current_node_opponent.state
-                    if not current_node_opponent.children:
-                        # For a new node, initialize its state, then choose a child as normal.
-                        legal_actions = self.evaluator.prior(state)
-                        if current_node_opponent is root_opponent and self._dirichlet_noise:
-                            epsilon, alpha = self._dirichlet_noise
-                            noise = self._random_state.dirichlet([alpha] * len(legal_actions))
-                            legal_actions = [(a, (1 - epsilon) * p + epsilon * n)
-                                             for (a, p), n in zip(legal_actions, noise)]
-                        # Reduce bias from move generation order.
-                        self._random_state.shuffle(legal_actions)
-
-                        player = state.current_player()  # Player that has to choose an action
-                        for action, prior in legal_actions:
-                            state_copy = state.clone()  # Create clones of the state for every possible action
-                            if self.verbose:
-                                print(state_copy.observation_string(0))
-                            state_copy.apply_action(action)
-                            if state_copy.is_terminal():
-                                # Store state in observation node, Observation is useless as the game is already ended.
-                                # This is necessary, as we do not model the resulting state after applying an action
-                                # but just the resulting observation that this resulting state induces
-                                # To be able to get the returns from terminal state, we include the state in observation
-                                # nodes that result from terminal states
-                                terminal_state = state_copy
-                            else:
-                                terminal_state = None
-                            information_set_generator_copy = information_set_generator_opponent.clone()
-                            if self.verbose:
-                                print(
-                                    f"info set: {[[state.observation_string(player_id) for state in set] for player_id, set in information_set_generator_copy.previous_information_set.items()]}")
-                                print(information_set_generator_copy.action_history)
-                                print(information_set_generator_copy._get_observation(state_copy, 1))
-                            information_set_generator_copy.register(state_copy, action)
-
-                            child_node = ImperfectInformationSearchNode.from_observation_tree_node(
-                                information_set_generator_copy,
-                                action,
-                                player,  # Player that chose the action
-                                prior,
-                                terminal_state=terminal_state,
-                                causing_state=state_copy,
-                                deciding_player=state_copy.current_player())
-                            current_node_opponent.children.append(child_node)
-                        # This will be the last node to be considered in the Opponent Model Tree
-
-                    if state.is_chance_node():
-                        # For chance nodes, rollout according to chance node's probability
-                        # distribution
-                        outcomes = state.chance_outcomes()
-                        action_list, prob_list = zip(*outcomes)
-                        action = self._random_state.choice(action_list, p=prob_list)
-                        chosen_child = next(
-                            c for c in current_node_opponent.children if c.action == action)
+                    if information_set_generator_opponent.current_player() == -1:
+                        current_node_opponent = self._handle_chance_node(current_node_opponent,
+                                                                         information_set_generator_opponent,
+                                                                         1 - root_player)
                     else:
-                        # Otherwise choose node with largest UCT value
-                        chosen_child = max(
-                            current_node_opponent.children,
-                            key=lambda c: self._child_selection_fn(  # pylint: disable=g-long-lambda
-                                c, current_node_opponent.explore_count, self.uct_c))
-
-                    if self.verbose:
-                        print(f"  - Player {current_node_opponent.player} chooses action {chosen_child.action}")
-
-                    # Set to chosen child node
-                    current_node_opponent = chosen_child  # next node will be observation node
+                        chosen_child, current_node_opponent = self._handle_choose_action_opponent(current_node_opponent,
+                                                                                                  information_set_generator_opponent,
+                                                                                                  root_opponent)
                     visit_path_opponent.append(current_node_opponent)
 
                 # -------------------------------------------------------------------------
@@ -332,88 +282,17 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
                 # -------------------------------------------------------------------------
 
                 if not current_node_root.is_terminal():
-                    root_player_state = current_node_root.state  # State that was guessed
-
-                    if not current_node_root.children:
-                        # For a new node, initialize its state, then choose a child as normal.
-                        # Choose actions with regard to just guessed state
-                        legal_actions = self.evaluator.prior(root_player_state)
-                        if current_node_root is root and self._dirichlet_noise:
-                            epsilon, alpha = self._dirichlet_noise
-                            noise = self._random_state.dirichlet([alpha] * len(legal_actions))
-                            legal_actions = [(a, (1 - epsilon) * p + epsilon * n)
-                                             for (a, p), n in zip(legal_actions, noise)]
-                        # Reduce bias from move generation order.
-                        self._random_state.shuffle(legal_actions)
-
-                        player = root_player_state.current_player()  # Player that has to choose an action now
-                        for action, prior in legal_actions:
-                            assert len(information_set_generator_root.previous_information_set[
-                                           root_player]) == 1, "Root should always have exact one information set state"
-
-                            # In the Root Player Model Tree, we always apply actions to the root player's guessed state
-                            # This state always contains the root player's original private information. This is
-                            # necessary in order to be able to get correct rewards in the end.
-                            # For the root player, this does not change anything, as he guessed this state anyway.
-                            # For the opponent player, this does not mean that he may not guess the root player's
-                            # Private information wrong. In fact, the actions chosen by the opponent player still
-                            # depend on a potentially wrongly guessed state which is fine and desired (see a few lines
-                            # above)
-                            # Essentially, this means that Opponent may guess wrong but observations are made on
-                            # actual game state
-                            state_copy = information_set_generator_root.previous_information_set[root_player][0].clone()
-
-                            state_copy.apply_action(action)
-                            if state_copy.is_terminal():
-                                # Store state in observation node, Observation is useless as the game is already ended.
-                                # This is necessary, as we do not model the resulting state after applying an action
-                                # but just the resulting observation that this resulting state induces
-                                # To be able to get the returns from terminal state, we include the state in observation
-                                # nodes that result from terminal states
-                                terminal_state = state_copy
-                            else:
-                                terminal_state = None
-
-                            information_set_generator_copy = information_set_generator_root.clone()
-                            information_set_generator_copy.register(state_copy, action)
-
-                            child_node = ImperfectInformationSearchNode.from_observation_tree_node(
-                                information_set_generator_copy,
-                                action,
-                                player,
-                                prior,
-                                terminal_state=terminal_state,
-                                causing_state=state_copy,
-                                deciding_player=state_copy.current_player())
-                            current_node_root.children.append(child_node)
-                        # This will be the last node to be considered in the Root Player Model Tree
-
-                    if len(visit_path_root) == 2:
-                        # First time the root player plays an action, he should play the same action as
-                        # when modeling opponent. this allows to directly map the rewards to the root player's first
-                        # chosen action
-                        corresponding_action_root = [c for c in current_node_root.children if
-                                                     c.action == current_node_opponent.action]
-                        assert len(corresponding_action_root) == 1, \
-                            f"Could not find corresponding root action {current_node_opponent.action}"
-                        chosen_child_root = corresponding_action_root[0]
-                    elif root_player_state.current_player() == root_player:
-                        chosen_child_root = max(
-                            current_node_root.children,
-                            key=lambda c: self._child_selection_fn(  # pylint: disable=g-long-lambda
-                                c, current_node_root.explore_count, self.uct_c))
+                    if information_set_generator_root.current_player() == -1:
+                        current_node_root = self._handle_chance_node(current_node_root,
+                                                                     information_set_generator_root,
+                                                                     root_player)
                     else:
-                        # TODO: should we really fix the opponent's actions to be the same as when opponent models himself?
-                        corresponding_action_root = [c for c in current_node_root.children if
-                                                     c.action == chosen_child.action]
-                        assert len(
-                            corresponding_action_root) == 1, f"Could not find corresponding root action {chosen_child.action}"
-                        chosen_child_root = corresponding_action_root[0]
-                    current_node_root = chosen_child_root  # Update Root Player Model node
-                    # State is chosen state after applying the action. It corresponds to the root player's original
-                    # private information as the (potentially wrong guessed) state was overwritten by the root player's
-                    # belief above
-                    root_player_state = chosen_child_root.state
+                        current_node_root, root_player_state = self._handle_choose_action_root(chosen_child,
+                                                                                               current_node_opponent,
+                                                                                               current_node_root,
+                                                                                               information_set_generator_root,
+                                                                                               root, root_player,
+                                                                                               visit_path_root)
                     visit_path_root.append(current_node_root)
 
             # =========================================================================
@@ -428,56 +307,13 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
                 # Opponent Modeling (Guessing)
                 # -------------------------------------------------------------------------
 
-                chosen_child = None  # Will be filled for sure in the first iteration
                 if not current_node_opponent.is_terminal():
-
                     information_set_generator_opponent = current_node_opponent.information_set_generator
-                    if not current_node_opponent.children:
-                        # Evaluator calculates information set and computes a prior probability for guessing each state
-                        evaluated_information_set = self.evaluator.prior_observation_node(
-                            information_set_generator_opponent)
-                        for state_id, (state, prior) in enumerate(evaluated_information_set):
-                            game_tree_node = ImperfectInformationSearchNode.from_game_tree_node(
-                                state_id,
-                                information_set_generator_opponent.current_player(),
-                                # Player that chooses next action also guesses now from observation
-                                prior,
-                                state#.clone()
-                            )  # TODO: is cloning necessary?
-                            current_node_opponent.children.append(game_tree_node)
-
-                    # Choose node, i.e., guess game state, with largest UCT value
-                    chosen_child = max(
-                        current_node_opponent.children,
-                        key=lambda c: self._child_selection_fn(  # pylint: disable=g-long-lambda
-                            c, current_node_opponent.explore_count, self.uct_c))
-
-                    if self.verbose:
-                        print(
-                            f"  - Player {current_node_opponent.player} guesses state {current_node_opponent.children.index(chosen_child)}")
-
-                    current_node_opponent = chosen_child  # next node will be guessed game state
-                    working_state = chosen_child.state
-                    # Determinize on first guess
-
-                    information_set_generator_opponent = information_set_generator_opponent.clone()
-                    # Update guessing player's belief with just chosen state
-                    information_set_generator_opponent.previous_information_set[working_state.current_player()] = [
-                        working_state.clone()]
-
-                    # Update opponent's beliefs with public observable states that are ok with the just chosen state
-                    if information_set_generator_opponent._public_observer is not None:
-                        opponent_states = information_set_generator_opponent.get_plausible_states(
-                            1 - working_state.current_player(),
-                            working_state)
-                        assert len(
-                            opponent_states) > 0, "Opponent's information set will be empty after determinization"
-                        information_set_generator_opponent.previous_information_set[
-                            1 - working_state.current_player()] = opponent_states
+                    if information_set_generator_opponent.current_player() == -1:
+                        current_node_opponent = self._handle_chance_node_guess(current_node_opponent)
                     else:
-                        information_set_generator_opponent.previous_information_set[
-                            1 - working_state.current_player()] = [
-                            working_state.clone()]
+                        chosen_child, current_node_opponent, information_set_generator_opponent = self._handle_guess_state_opponent(
+                            current_node_opponent, information_set_generator_opponent)
                     visit_path_opponent.append(current_node_opponent)
 
                 # -------------------------------------------------------------------------
@@ -486,68 +322,15 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
 
                 if not current_node_root.is_terminal():
                     information_set_generator_root = current_node_root.information_set_generator
-                    if not current_node_root.children:
-                        # Evaluator calculates information set and computes a prior probability for guessing each state
-                        evaluated_information_set = self.evaluator.prior_observation_node(
-                            information_set_generator_root)
-                        for state_id, (state, prior) in enumerate(evaluated_information_set):
-                            game_tree_node = ImperfectInformationSearchNode.from_game_tree_node(
-                                state_id,
-                                information_set_generator_root.current_player(),
-                                # Player that chooses next action also guesses now from observation
-                                # Same player that guesses from observation also chooses action later
-                                prior,
-                                state#.clone()
-                            )  # TODO: is cloning necessary?
-                            current_node_root.children.append(game_tree_node)
 
-                    if root_player_state is None:
-                        # In the beginning, determinize Root and opponent modeling with same state
-                        corresponding_guess = [c for c in current_node_root.children if c.action == chosen_child.action]
-                        assert len(
-                            corresponding_guess) == 1, f"Could not find corresponding guess {chosen_child.action}"
-                        current_node_root = corresponding_guess[0]
-                        root_player_state = current_node_root.state
+                    if information_set_generator_root.current_player() == -1:
+                        current_node_root = self._handle_chance_node_guess(current_node_root)
                     else:
-                        # Root modeling can diverge from opponent modeling by choosing a different action than in
-                        # the Opponent Model Tree
-                        chosen_child_root = max(
-                            current_node_root.children,
-                            key=lambda c: self._child_selection_fn(  # pylint: disable=g-long-lambda
-                                c, current_node_root.explore_count, self.uct_c))
-                        current_node_root = chosen_child_root
-                        # root_player_state = current_node_root.state  # TODO: does it matter?
-
-                    # Only when root player chooses a state, beliefs are updated.
-                    if current_node_root.state.current_player() == root_player:
-                        assert current_node_root.state.current_player() == root_player, f"root player is {root_player}, current state: {current_node_root.state.current_player()}"
-
-                        # Update root player's belief with just chosen state
-                        information_set_generator_root.previous_information_set[
-                            current_node_root.state.current_player()] = [current_node_root.state.clone()]
-                        # information_set_generator_root.previous_information_set[
-                        #     1 - current_node_root.state.current_player()] = [
-                        #     current_node_root.state.clone()]
-
-                        # Opponent is allowed to make wrong guesses, i.e., his beliefs are drawn from public observations
-                        if information_set_generator_root._public_observer is not None:
-                            opponent_states = information_set_generator_root.get_plausible_states(
-                                1 - root_player,
-                                current_node_root.state)
-                            assert len(
-                                opponent_states) > 0, "Opponent's information set will be empty after determinization"
-                            information_set_generator_root.previous_information_set[
-                                1 - current_node_root.state.current_player()] = opponent_states
-                        else:
-                            information_set_generator_root.previous_information_set[
-                                1 - root_player_state.current_player()] = [
-                                root_player_state.clone()]
-                    # else:
-                    #     information_set_generator_root = information_set_generator_root.clone()
-                    #     information_set_generator_root.previous_information_set[current_node_root.state.current_player()] = [
-                    #         current_node_root.state.clone()]
-                    #
-                    #     # Don't change root player's information set (correct game state is there)
+                        current_node_root = self._handle_guess_state_root(chosen_child, current_node_opponent,
+                                                                          current_node_root,
+                                                                          information_set_generator_root, root_player,
+                                                                          root_player_state, visit_path_opponent,
+                                                                          visit_path_root)
 
                     visit_path_root.append(current_node_root)
 
@@ -556,6 +339,328 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
                   current_node_root.state)
 
         return visit_path_opponent, current_node_opponent, visit_path_root, current_node_root
+
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+    # Helper Methods: Guessing State
+    # -------------------------------------------------------------------------
+
+    def _handle_guess_state_root(self, chosen_child, current_node_opponent, current_node_root,
+                                 information_set_generator_root, root_player, root_player_state, visit_path_opponent,
+                                 visit_path_root):
+        self._handle_expand_leaf(current_node_root, information_set_generator_root)
+        if root_player_state is None:
+            assert not current_node_opponent.is_terminal(), f"Cannot run IIG-MCTS on terminal node, {len(visit_path_opponent)}, {len(visit_path_root)}"
+            assert chosen_child is not None, f"Opponent has to choose an action in first round"
+            # In the beginning, determinize Root and opponent modeling with same state
+            corresponding_guess = [c for c in current_node_root.children if
+                                   c.action == chosen_child.action]
+            assert len(
+                corresponding_guess) == 1, f"Could not find corresponding guess {chosen_child.action}"
+            current_node_root = corresponding_guess[0]
+            root_player_state = current_node_root.state
+        else:
+            # Root modeling can diverge from opponent modeling by choosing a different action than in
+            # the Opponent Model Tree
+            chosen_child_root = max(
+                current_node_root.children,
+                key=lambda c: self._child_selection_fn(  # pylint: disable=g-long-lambda
+                    c, current_node_root.explore_count, self.uct_c / self.optimism))
+            current_node_root = chosen_child_root
+            # root_player_state = current_node_root.state  # TODO: does it matter?
+        # Only when root player chooses a state, beliefs are updated.
+        if current_node_root.state.current_player() == root_player:
+            assert current_node_root.state.current_player() == root_player, f"root player is {root_player}, current state: {current_node_root.state.current_player()}"
+
+            # Update root player's belief with just chosen state
+            information_set_generator_root.previous_information_set[
+                current_node_root.state.current_player()] = [current_node_root.state.clone()]
+            # information_set_generator_root.previous_information_set[
+            #     1 - current_node_root.state.current_player()] = [
+            #     current_node_root.state.clone()]
+
+            # Opponent is allowed to make wrong guesses, i.e., his beliefs are drawn from public observations
+            if information_set_generator_root._public_observer is not None:
+                opponent_states = information_set_generator_root.get_plausible_states(
+                    1 - root_player,
+                    current_node_root.state)
+                assert len(
+                    opponent_states) > 0, "Opponent's information set will be empty after determinization"
+                information_set_generator_root.previous_information_set[
+                    1 - current_node_root.state.current_player()] = opponent_states
+            else:
+                information_set_generator_root.previous_information_set[
+                    1 - root_player_state.current_player()] = [
+                    root_player_state.clone()]
+        # else:
+        #     information_set_generator_root = information_set_generator_root.clone()
+        #     information_set_generator_root.previous_information_set[current_node_root.state.current_player()] = [
+        #         current_node_root.state.clone()]
+        #
+        #     # Don't change root player's information set (correct game state is there)
+        return current_node_root
+
+    def _handle_guess_state_opponent(self, current_node_opponent, information_set_generator_opponent):
+        chosen_child = None  # Will be filled for sure in the first iteration
+        self._handle_expand_leaf(current_node_opponent, information_set_generator_opponent)
+        # Choose node, i.e., guess game state, with largest UCT value
+        chosen_child = max(
+            current_node_opponent.children,
+            key=lambda c: self._child_selection_fn(  # pylint: disable=g-long-lambda
+                c, current_node_opponent.explore_count, self.uct_c / self.optimism))
+        if self.verbose:
+            print(
+                f"  - Player {current_node_opponent.player} guesses state {current_node_opponent.children.index(chosen_child)}")
+        current_node_opponent = chosen_child  # next node will be guessed game state
+        working_state = chosen_child.state
+        # Determinize on first guess
+        information_set_generator_opponent = information_set_generator_opponent.clone()
+        # Update guessing player's belief with just chosen state
+        information_set_generator_opponent.previous_information_set[working_state.current_player()] = [
+            working_state.clone()]
+        # Update opponent's beliefs with public observable states that are ok with the just chosen state
+        if information_set_generator_opponent._public_observer is not None:
+            opponent_states = information_set_generator_opponent.get_plausible_states(
+                1 - working_state.current_player(),
+                working_state)
+            assert len(
+                opponent_states) > 0, "Opponent's information set will be empty after determinization"
+            information_set_generator_opponent.previous_information_set[
+                1 - working_state.current_player()] = opponent_states
+        else:
+            information_set_generator_opponent.previous_information_set[
+                1 - working_state.current_player()] = [
+                working_state.clone()]
+        return chosen_child, current_node_opponent, information_set_generator_opponent
+
+    def _handle_expand_leaf(self, current_node, information_set_generator):
+        if not current_node.children:
+            # Evaluator calculates information set and computes a prior probability for guessing each state
+            evaluated_information_set = self.evaluator.prior_observation_node(information_set_generator)
+            self._random_state.shuffle(evaluated_information_set)
+            for state_id, (state, prior) in enumerate(evaluated_information_set):
+                game_tree_node = ImperfectInformationSearchNode.from_game_tree_node(
+                    state_id,
+                    information_set_generator.current_player(),
+                    # Player that chooses next action also guesses now from observation
+                    prior,
+                    state  # .clone()
+                )  # TODO: is cloning necessary?
+                current_node.children.append(game_tree_node)
+
+    # -------------------------------------------------------------------------
+    # Helper Methods: Choose Action
+    # -------------------------------------------------------------------------
+
+    def _handle_choose_action_root(self, chosen_child, current_node_opponent, current_node_root,
+                                   information_set_generator_root, root, root_player, visit_path_root):
+        root_player_state = current_node_root.state  # State that was guessed
+        if not current_node_root.children:
+            # For a new node, initialize its state, then choose a child as normal.
+            # Choose actions with regard to just guessed state
+            legal_actions = self.evaluator.prior(root_player_state)
+            if current_node_root is root and self._dirichlet_noise:
+                epsilon, alpha = self._dirichlet_noise
+                noise = self._random_state.dirichlet([alpha] * len(legal_actions))
+                legal_actions = [(a, (1 - epsilon) * p + epsilon * n)
+                                 for (a, p), n in zip(legal_actions, noise)]
+            # Reduce bias from move generation order.
+            self._random_state.shuffle(legal_actions)
+
+            player = root_player_state.current_player()  # Player that has to choose an action now
+            for action, prior in legal_actions:
+                assert len(information_set_generator_root.previous_information_set[
+                               root_player]) == 1, "Root should always have exact one information set state"
+
+                # In the Root Player Model Tree, we always apply actions to the root player's guessed state
+                # This state always contains the root player's original private information. This is
+                # necessary in order to be able to get correct rewards in the end.
+                # For the root player, this does not change anything, as he guessed this state anyway.
+                # For the opponent player, this does not mean that he may not guess the root player's
+                # Private information wrong. In fact, the actions chosen by the opponent player still
+                # depend on a potentially wrongly guessed state which is fine and desired (see a few lines
+                # above)
+                # Essentially, this means that Opponent may guess wrong but observations are made on
+                # actual game state
+                state_copy = information_set_generator_root.previous_information_set[root_player][
+                    0].clone()
+
+                state_copy.apply_action(action)
+                if state_copy.is_terminal():
+                    # Store state in observation node, Observation is useless as the game is already ended.
+                    # This is necessary, as we do not model the resulting state after applying an action
+                    # but just the resulting observation that this resulting state induces
+                    # To be able to get the returns from terminal state, we include the state in observation
+                    # nodes that result from terminal states
+                    terminal_state = state_copy
+                else:
+                    terminal_state = None
+
+                information_set_generator_copy = information_set_generator_root.clone()
+                information_set_generator_copy.register(state_copy, action)
+
+                child_node = ImperfectInformationSearchNode.from_observation_tree_node(
+                    information_set_generator_copy,
+                    action,
+                    player,
+                    prior,
+                    terminal_state=terminal_state,
+                    causing_state=state_copy,
+                    deciding_player=state_copy.current_player())
+                current_node_root.children.append(child_node)
+                # This will be the last node to be considered in the Root Player Model Tree
+        if len(visit_path_root) == 2:
+            # First time the root player plays an action, he should play the same action as
+            # when modeling opponent. this allows to directly map the rewards to the root player's first
+            # chosen action
+            corresponding_action_root = [c for c in current_node_root.children if
+                                         c.action == current_node_opponent.action]
+            assert len(corresponding_action_root) == 1, \
+                f"Could not find corresponding root action {current_node_opponent.action}"
+            chosen_child_root = corresponding_action_root[0]
+        elif True or root_player_state.current_player() == root_player:
+            # TODO: currently, we let the root player model the opponent moves independently instead
+            # TODO: of aligning them, as this leads to errors when modeling chance nodes
+            # TODO: Always executing this branch causes a failed test
+            chosen_child_root = max(
+                current_node_root.children,
+                key=lambda c: self._child_selection_fn(  # pylint: disable=g-long-lambda
+                    c, current_node_root.explore_count, self.uct_c))
+        else:
+            # TODO: should we really fix the opponent's actions to be the same as when opponent models himself?
+            assert chosen_child is not None, f"Chosen child cannot be none for corresponding action root"
+            corresponding_action_root = [c for c in current_node_root.children if
+                                         c.action == chosen_child.action]
+            if not len(corresponding_action_root) == 1:
+                print(current_node_root.state)
+                print(current_node_opponent.state)
+            assert len(
+                corresponding_action_root) == 1, f"Could not find corresponding root action {chosen_child.action}"
+            chosen_child_root = corresponding_action_root[0]
+        current_node_root = chosen_child_root  # Update Root Player Model node
+        # State is chosen state after applying the action. It corresponds to the root player's original
+        # private information as the (potentially wrong guessed) state was overwritten by the root player's
+        # belief above
+        root_player_state = chosen_child_root.state
+        assert root_player_state is not None, "state should not be None"
+        return current_node_root, root_player_state
+
+    def _handle_choose_action_opponent(self, current_node_opponent, information_set_generator_opponent, root_opponent):
+        state = current_node_opponent.state
+        if not current_node_opponent.children:
+            # For a new node, initialize its state, then choose a child as normal.
+            legal_actions = self.evaluator.prior(state)
+            if current_node_opponent is root_opponent and self._dirichlet_noise:
+                epsilon, alpha = self._dirichlet_noise
+                noise = self._random_state.dirichlet([alpha] * len(legal_actions))
+                legal_actions = [(a, (1 - epsilon) * p + epsilon * n)
+                                 for (a, p), n in zip(legal_actions, noise)]
+            # Reduce bias from move generation order.
+            self._random_state.shuffle(legal_actions)
+
+            player = state.current_player()  # Player that has to choose an action
+            for action, prior in legal_actions:
+                state_copy = state.clone()  # Create clones of the state for every possible action
+                if self.verbose:
+                    print(state_copy.observation_string(0))
+                state_copy.apply_action(action)
+                if state_copy.is_terminal():
+                    # Store state in observation node, Observation is useless as the game is already ended.
+                    # This is necessary, as we do not model the resulting state after applying an action
+                    # but just the resulting observation that this resulting state induces
+                    # To be able to get the returns from terminal state, we include the state in observation
+                    # nodes that result from terminal states
+                    terminal_state = state_copy
+                else:
+                    terminal_state = None
+                information_set_generator_copy = information_set_generator_opponent.clone()
+                if self.verbose:
+                    print(
+                        f"info set: {[[state.observation_string(player_id) for state in set] for player_id, set in information_set_generator_copy.previous_information_set.items()]}")
+                    print(information_set_generator_copy.action_history)
+                    print(information_set_generator_copy._get_observation(state_copy, 1))
+                information_set_generator_copy.register(state_copy, action)
+
+                child_node = ImperfectInformationSearchNode.from_observation_tree_node(
+                    information_set_generator_copy,
+                    action,
+                    player,  # Player that chose the action
+                    prior,
+                    terminal_state=terminal_state,
+                    causing_state=state_copy,
+                    deciding_player=state_copy.current_player())
+                current_node_opponent.children.append(child_node)
+            # This will be the last node to be considered in the Opponent Model Tree
+        if state.is_chance_node():
+            raise ValueError("State should never be chance node")
+        else:
+            # Otherwise choose node with largest UCT value
+            chosen_child = max(
+                current_node_opponent.children,
+                key=lambda c: self._child_selection_fn(  # pylint: disable=g-long-lambda
+                    c, current_node_opponent.explore_count, self.uct_c))
+        if self.verbose:
+            print(f"  - Player {current_node_opponent.player} chooses action {chosen_child.action}")
+        # Set to chosen child node
+        current_node_opponent = chosen_child  # next node will be observation node
+        return chosen_child, current_node_opponent
+
+    # -------------------------------------------------------------------------
+    # Helper Methods: Chance Node handling
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _handle_chance_node_guess(current_node):
+        # Chance player handling
+        if not current_node.children:
+            current_node.children = [
+                ImperfectInformationSearchNode.from_game_tree_node(
+                    0,
+                    -1,
+                    # Player that chooses next action also guesses now from observation
+                    0,
+                    None  # .clone()
+                )
+            ]
+        current_node = current_node.children[0]
+        return current_node
+
+    def _handle_chance_node(self, current_node, information_set_generator, player):
+        if self.verbose:
+            print(f'chance node select action player {player}')
+        possible_states = information_set_generator.previous_information_set[player]
+        all_action_masks = np.array([state.legal_actions_mask() for state in possible_states])
+        chance_player_actions = np.where(np.sum(all_action_masks, axis=0) > 0)[0]
+        if not current_node.children:
+
+            for action in chance_player_actions:
+                information_set_generator_copy = information_set_generator.clone()
+                information_set_generator_copy.register_chance_player_action(action)
+
+                child_node = ImperfectInformationSearchNode.from_observation_tree_node(
+                    information_set_generator_copy,
+                    action,
+                    -1,  # Player that chose the action
+                    0,
+                    terminal_state=None,
+                    causing_state=None,
+                    deciding_player=information_set_generator_copy.current_player())
+                current_node.children.append(child_node)
+        # For chance nodes, rollout according to chance node's probability
+        # distribution
+        all_chance_outcomes = np.zeros(self._game.max_chance_outcomes())
+        for state in possible_states:
+            for action, prob in state.chance_outcomes():
+                all_chance_outcomes[action] += prob
+        all_chance_outcomes /= len(possible_states)
+        assert np.sum(all_chance_outcomes) == 1.0, "Chance outcomes should sum to 1"
+        action = self._random_state.choice(range(self._game.max_chance_outcomes()),
+                                           p=all_chance_outcomes)
+        cc = next(
+            c for c in current_node.children if c.action == action)
+        current_node = cc
+        return current_node
 
     def mcts_search(self, information_set_generator: InformationSetGenerator) -> ImperfectInformationSearchNode:
         """

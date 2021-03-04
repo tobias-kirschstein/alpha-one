@@ -1,3 +1,7 @@
+"""
+Run with `python -m unittest discover tests/`
+"""
+
 import unittest
 import pyspiel
 
@@ -57,7 +61,8 @@ class TestImperfectInformationMCTS(unittest.TestCase):
                                                   uct_c,
                                                   n_simulations,
                                                   BasicImperfectInformationMCTSEvaluator(),
-                                                  solve,
+                                                  optimism=1.0,
+                                                  solve=solve,
                                                   child_selection_fn=SearchNode.puct_value)
         return ii_mcts_bot
 
@@ -156,7 +161,8 @@ class TestImperfectInformationMCTS(unittest.TestCase):
 
         self.assertEqual(len(root.children), 2)  # Two possible guesses, opponent has card 0 or card 1
 
-        opponent_guess = self.kuhn_child_with_guess_and_action(root, 0, 1)  # Guess that opponent has card 0 (which is not the case), and bet
+        opponent_guess = self.kuhn_child_with_guess_and_action(root, 0,
+                                                               1)  # Guess that opponent has card 0 (which is not the case), and bet
         self.assertIsNotNone(self.kuhn_get_guess(opponent_guess, 2))
         self.assertIsNotNone(self.kuhn_get_guess(opponent_guess, 1))
         self.assertEqual(len(opponent_guess.children), 2)
@@ -177,3 +183,38 @@ class TestImperfectInformationMCTS(unittest.TestCase):
         # Some debug output
         root.investigate()
         root_root.investigate()
+
+    def test_leduc_poker(self):
+        game = pyspiel.load_game('leduc_poker')
+        state = game.new_initial_state()
+        ii_mcts_bot = self.create_ii_mcts_bot(game, uct_c=5, n_simulations=500)
+        information_set_generator = InformationSetGenerator(game)
+
+        action = 1  # Player 0 gets card 1
+        state.apply_action(action)
+        information_set_generator.register(state, action)
+
+        action = 4  # Player 1 gets card 4
+        state.apply_action(action)
+        information_set_generator.register(state, action)
+
+        action = 1  # Player 0 passes
+        state.apply_action(action)
+        information_set_generator.register(state, action)
+
+        # action = 1  # Player 1 passes
+        # state.apply_action(action)
+        # information_set_generator.register(state, action)
+        #
+        # action = 5  # Public card is 5
+        # state.apply_action(action)
+        # information_set_generator.register(state, action)
+        #
+        # action = 1  # Player 1 passes
+        # state.apply_action(action)
+        # information_set_generator.register(state, action)
+
+        print(information_set_generator.current_player())
+        print(state.current_player())
+        root, root_root = ii_mcts_bot.mcts_search(information_set_generator)
+        root.investigate()
