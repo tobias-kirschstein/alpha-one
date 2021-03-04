@@ -14,6 +14,7 @@ class InformationSetGenerator:
         self.game = game
         self.action_history = defaultdict(list)
         self.observation_history = defaultdict(list)
+        self.observation_buffer = defaultdict(list)
         self.previous_information_set = dict()
 
         if hasattr(game, 'make_observer') or hasattr(game, 'make_py_observer'):
@@ -82,6 +83,9 @@ class InformationSetGenerator:
     def register_observation(self, state: pyspiel.State):
         self.observation_history[0].append(self._get_observation(state, 0))
         self.observation_history[1].append(self._get_observation(state, 1))
+
+        self.observation_buffer[0].append(self._get_observation(state, 0))
+        self.observation_buffer[1].append(self._get_observation(state, 1))
 
         self.calculate_information_set(0)
         self.calculate_information_set(1)

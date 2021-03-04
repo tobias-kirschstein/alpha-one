@@ -43,7 +43,7 @@ def _generate_one_game_parallel(game, checkpoint_manager: CheckpointManager, mct
 
 
 def _generate_one_game(game, model_current_best, mcts_config: MCTSConfig):
-    if mcts_config.imperfect_info:
+    if mcts_config.determinized_MCTS:
         trajectory = play_one_game_d(game, [model_current_best, model_current_best], mcts_config)
 
     else:

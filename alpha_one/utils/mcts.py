@@ -1,5 +1,4 @@
 import numpy as np
-import pyspiel
 from open_spiel.python.algorithms import mcts
 from open_spiel.python.algorithms.alpha_zero import evaluator as evaluator_lib
 from open_spiel.python.algorithms.mcts import RandomRolloutEvaluator
@@ -18,8 +17,10 @@ class MCTSConfig(ModelConfig):
                  temperature_drop: int = None,
                  policy_epsilon: float = None,
                  policy_alpha: float = None,
-                 imperfect_info: bool = False,
+                 determinized_MCTS: bool = False,
+                 alpha_one: bool = False,
                  omniscient_observer: bool = False,
+                 state_to_value=None,
                  use_reward_policy: bool = False):
         super(MCTSConfig, self).__init__(
             uct_c=uct_c,
@@ -28,8 +29,10 @@ class MCTSConfig(ModelConfig):
             temperature_drop=temperature_drop,
             policy_epsilon=policy_epsilon,
             policy_alpha=policy_alpha,
-            imperfect_info=imperfect_info,
+            determinized_MCTS=determinized_MCTS,
+            alpha_one=alpha_one,
             omniscient_observer=omniscient_observer,
+            state_to_value=state_to_value,
             use_reward_policy=use_reward_policy
         )
 
@@ -151,14 +154,7 @@ def play_one_game(game, bots, temperature, temperature_drop, omniscient_observer
         if not state.is_chance_node():
             # TODO: consider whether chance player actions should be recorded as well and filtered out later
             trajectory.append(state, action, policy)
-        try:
-            state.apply_action(action)
-        except pyspiel.SpielError as e:
-            print(policy)
-            print(action)
-            print(state.legal_actions_mask())
-            raise e
-
+        state.apply_action(action)
         current_turn += 1
 
     trajectory.set_final_rewards(state.returns())
