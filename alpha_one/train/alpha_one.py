@@ -49,6 +49,7 @@ def _generate_one_game(game, model_current_best, mcts_config: MCTSConfig):
     trajectory_observation, trajectory_game = play_one_game_alphaone(game, [bot, bot], mcts_config)
 
     p1_outcome = trajectory_game.get_final_reward(0)
+    p1_outcome = p1_outcome / game.max_utility() if p1_outcome > 0 else p1_outcome / -game.min_utility()
 
     new_observations = [model_lib.TrainInput(s.observation, s.legals_mask, s.policy, value=p1_outcome)
                   for s in trajectory_observation.states]

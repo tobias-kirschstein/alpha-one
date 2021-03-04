@@ -125,7 +125,7 @@ def play_one_game_alphaone(game, bots, mcts_config: MCTSConfig):
             else:
                 action = np.argmax(game_node_policy)
 
-            trajectory_observation.states.append(TrajectoryState(state_mask, 
+            trajectory_observation.states.append(TrajectoryState(state.observation_tensor(), 
                                                                  state.current_player(), 
                                                                  state_mask, 
                                                                  action,
