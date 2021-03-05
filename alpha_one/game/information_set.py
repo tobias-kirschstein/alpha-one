@@ -71,7 +71,7 @@ class InformationSetGenerator:
                     self._observation_buffer[player_id]]
 
             clone.observation_history[player_id] = [
-                [np.array(observation) for observation in self.observation_history[player_id]]
+                list(observation) for observation in self.observation_history[player_id]
             ]
         clone.previous_information_set = {
             player_id: [state.clone() for state in self.previous_information_set[player_id]]
