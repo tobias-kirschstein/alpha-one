@@ -107,6 +107,19 @@ class InformationSetGenerator:
         self._current_player = state.current_player()
 
     def register_chance_player_action(self, action: int):
+        """
+        Models a 'what-if' scenario. This method can be used INSTEAD of the regular register() method to update the
+        information sets of the corresponding players to reflect what states the players could be in if the chance
+        player played the given action now. This is used in settings where no true game state is available, e.g., in
+        the simulations of IIG-MCTS.
+        Note that NO observation will be added to the observation history as the observation would depend on the true
+        state (which is not available)
+
+        Parameters
+        ----------
+        action: the action that the chance player would play
+        """
+
         assert self.current_player() == -1, f"Can only register chance player action when it is chance player's turn (not player {self.current_player()})"
         for player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}:
             information_set = []
