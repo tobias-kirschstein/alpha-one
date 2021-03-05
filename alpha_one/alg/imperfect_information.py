@@ -51,14 +51,11 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
             return [(state, 1.0 / len(information_set)) for state in information_set]
         
         obs = information_set_generator.get_observation_history()
-        obs = obs[len(obs) - 1]
-        if isinstance(obs[0], np.ndarray):
-            obs = obs[len(obs) - 1]
-        #print(obs)
+        obs = obs[-1:]
         information_set = information_set_generator.calculate_information_set()
         state_mask, index_track = get_state_mask(self._state_to_value, information_set)
 
-        obs = np.expand_dims(obs, 0)
+        #obs = np.expand_dims(obs, 0)
         mask = np.expand_dims(state_mask, 0)
 
         _, policy = self._observation_model.inference(obs, mask)
@@ -77,14 +74,11 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
             return [0, 0]
 
         obs = information_set_generator.get_observation_history()
-        obs = obs[len(obs) - 1]
-        if isinstance(obs[0], np.ndarray):
-            obs = obs[len(obs) - 1]
-        #print(obs)
+        obs = obs[-1:]
         information_set = information_set_generator.calculate_information_set()
         state_mask, _ = get_state_mask(self._state_to_value, information_set)
 
-        obs = np.expand_dims(obs, 0)
+        #obs = np.expand_dims(obs, 0)
         mask = np.expand_dims(state_mask, 0)
 
         value, _ = self._observation_model.inference(obs, mask)
@@ -94,7 +88,10 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
 
     def evaluate(self, state):
 
-        if state.is_chance_node():
+        if state is None:
+        	return [0, 0]
+        
+        elif state.is_chance_node():
             return [0, 0]
 
         # add total information of the state not just private observation after guessing state
@@ -109,7 +106,11 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
 
     def prior(self, state):
 
-        if state.is_chance_node():
+        if state is None:
+            legal_actions = state.legal_actions(state.current_player())
+            return [(action, 1.0 / len(legal_actions)) for action in legal_actions]
+        
+        elif state.is_chance_node():
             return state.chance_outcomes()
 
         obs = np.expand_dims(self._observer.get_observation_tensor(state), 0)
@@ -131,6 +132,7 @@ class DeterminizedMCTSEvaluator(Evaluator):
 
     def evaluate(self, state):
 
+        
         if state.is_chance_node():
             return [0, 0]
 
