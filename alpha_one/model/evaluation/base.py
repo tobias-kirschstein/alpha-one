@@ -4,7 +4,7 @@ from alpha_one.metrics import MatchOutcome
 from alpha_one.model.model_manager import CheckpointManager
 from alpha_one.utils.mcts import initialize_bot, play_one_game, MCTSConfig
 from alpha_one.utils.determinized_mcts import play_one_game_d
-from alpha_one.utils.mcts_II import initialize_bot_alphaone, play_one_game_alphaone
+from alpha_one.utils.mcts_II import initialize_bot_alphaone, play_one_game_alphaone, IIGMCTSConfig
 import numpy as np
 import ray
 
@@ -14,7 +14,7 @@ def _compare_models(game, model_1, model_2, mcts_config: MCTSConfig, player_id_m
         models = [model_1, model_2] if player_id_model_1 == 0 else [model_2, model_1]
         return play_one_game_d(game, models, mcts_config)
 
-    elif mcts_config.alpha_one:
+    elif isinstance(mcts_config, IIGMCTSConfig) and mcts_config.alpha_one:
         mcts_bot_model_1 = initialize_bot_alphaone(game, model_1, mcts_config)
 
         mcts_bot_model_2 = initialize_bot_alphaone(game, model_2, mcts_config)
@@ -26,25 +26,26 @@ def _compare_models(game, model_1, model_2, mcts_config: MCTSConfig, player_id_m
         trajectory_observation, trajectory_game = play_one_game_alphaone(game, bots, mcts_config)
 
         return trajectory_game
+    else:
 
 
 
-    mcts_bot_model_1 = initialize_bot(game, model_1, mcts_config.uct_c,
-                                      mcts_config.max_mcts_simulations,
-                                      mcts_config.policy_epsilon, mcts_config.policy_alpha,
-                                      omniscient_observer=mcts_config.omniscient_observer)
+        mcts_bot_model_1 = initialize_bot(game, model_1, mcts_config.uct_c,
+                                          mcts_config.max_mcts_simulations,
+                                          mcts_config.policy_epsilon, mcts_config.policy_alpha,
+                                          omniscient_observer=mcts_config.omniscient_observer)
 
-    mcts_bot_model_2 = initialize_bot(game, model_2, mcts_config.uct_c,
-                                      mcts_config.max_mcts_simulations,
-                                      mcts_config.policy_epsilon, mcts_config.policy_alpha,
-                                      omniscient_observer=mcts_config.omniscient_observer)
+        mcts_bot_model_2 = initialize_bot(game, model_2, mcts_config.uct_c,
+                                          mcts_config.max_mcts_simulations,
+                                          mcts_config.policy_epsilon, mcts_config.policy_alpha,
+                                          omniscient_observer=mcts_config.omniscient_observer)
 
-    bots = [mcts_bot_model_1, mcts_bot_model_2] \
-        if player_id_model_1 == 0 \
-        else [mcts_bot_model_2, mcts_bot_model_1]
+        bots = [mcts_bot_model_1, mcts_bot_model_2] \
+            if player_id_model_1 == 0 \
+            else [mcts_bot_model_2, mcts_bot_model_1]
 
-    return play_one_game(game, bots, mcts_config.temperature, mcts_config.temperature_drop,
-                         omniscient_observer=mcts_config.omniscient_observer)
+        return play_one_game(game, bots, mcts_config.temperature, mcts_config.temperature_drop,
+                             omniscient_observer=mcts_config.omniscient_observer)
 
 
 @ray.remote(num_returns=1)

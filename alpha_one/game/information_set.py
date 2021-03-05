@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import List
-import numpy as np
 
+import numpy as np
 import pyspiel
 from open_spiel.python.observation import make_observation
 
@@ -78,6 +78,7 @@ class InformationSetGenerator:
             for player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}
             if player_id in self.previous_information_set}
         clone._current_player = self._current_player
+
         return clone
 
     def register_action(self, action: int, player_id: int = None):
@@ -130,6 +131,8 @@ class InformationSetGenerator:
             self.previous_information_set[player_id] = information_set
             assert all([state.current_player() == information_set[0].current_player() for state in
                         information_set]), f"All nodes in information set have to belong to same player!, {[(str(s), s.current_player()) for s in information_set]}"
+            assert len(self.previous_information_set[
+                           player_id]) > 0, f"Information Set is empty after registering chance node action {action}. Illegal action?"
         self._current_player = information_set[0].current_player()
 
     def register(self, state: pyspiel.State, action: int):

@@ -52,6 +52,9 @@ class CheckpointManager(ABC):
     def get_run_name(self):
         return self.run_name
 
+    def get_model_store_path(self):
+        return self.model_store_path
+
 
 class ModelManager:
 
@@ -66,7 +69,7 @@ class ModelManager:
         return [f"{self.prefix}-{run_id}" for run_id in run_ids]
 
     def generate_run_name(self):
-        return generate_run_name(self.model_store_path, self.prefix)
+        return generate_run_name(self.model_store_path, self.prefix, match_arbitrary_suffixes=True)
 
     def new_run(self):
         return self.cls_checkpoint_manager(self.model_dir, self.generate_run_name())

@@ -17,11 +17,10 @@ class MCTSConfig(ModelConfig):
                  temperature_drop: int = None,
                  policy_epsilon: float = None,
                  policy_alpha: float = None,
-                 determinized_MCTS: bool = False,
-                 alpha_one: bool = False,
                  omniscient_observer: bool = False,
-                 state_to_value=None,
-                 use_reward_policy: bool = False):
+                 use_reward_policy: bool = False,
+                 determinized_MCTS: bool = False,
+                 **kwargs):
         super(MCTSConfig, self).__init__(
             uct_c=uct_c,
             max_mcts_simulations=max_mcts_simulations,
@@ -29,11 +28,10 @@ class MCTSConfig(ModelConfig):
             temperature_drop=temperature_drop,
             policy_epsilon=policy_epsilon,
             policy_alpha=policy_alpha,
-            determinized_MCTS=determinized_MCTS,
-            alpha_one=alpha_one,
             omniscient_observer=omniscient_observer,
-            state_to_value=state_to_value,
-            use_reward_policy=use_reward_policy
+            use_reward_policy=use_reward_policy,
+            determinized_MCTS=determinized_MCTS,
+            **kwargs
         )
 
 
@@ -99,11 +97,57 @@ def compute_mcts_policy(game, root, temperature):
     return policy
 
 
-def compute_mcts_policy_reward(game, state, root, temperature=1):
-    if state.is_chance_node():
-        policy = np.zeros(game.max_chance_outcomes())
+def compute_mcts_policy_new(root, legal_actions_mask, temperature: float = 1.0, normalize=True):
+    legal_actions_mask = np.array(legal_actions_mask, dtype=np.bool)
+    policy = np.zeros(len(legal_actions_mask))
+
+    for c in root.children:
+        policy[c.action] = c.explore_count
+
+    assert np.sum(
+        policy[~np.array(legal_actions_mask, dtype=np.bool)]) == 0, f"MCTS gave non-zero weight to illegal actions!"
+
+    if temperature == 0 or temperature is None:
+        # Return single-peaked policy with argmax
+        new_policy = np.zeros(len(legal_actions_mask))
+        # Explicitly set illegal actions to -inf as it can happen that policy is all 0
+        # (if no child was explored or all rewards are 0)
+        policy[~legal_actions_mask] = float('-inf')
+        new_policy[policy.argmax(-1)] = 1
+        policy = new_policy
     else:
-        policy = np.zeros(game.num_distinct_actions())
+        policy = policy ** (1 / temperature)
+
+        if normalize:
+            policy /= policy.sum()
+
+    return policy
+
+
+def compute_mcts_policy_reward(root, legal_actions_mask, temperature: float = 1.0, normalize=True):
+    """
+    Computes a policy after an MCTS search has been conducted by leveraging both explore counts and total rewards
+    of the child nodes.
+
+    Parameters
+    ----------
+    root:
+        node where MCTS was started
+    legal_actions_mask:
+        binary mask to indicate which actions are legal at current node
+    temperature: (optional)
+        Temperature exponent for the final policy
+    normalize:
+        default = True
+        Whether or not the returned policy should be normalized via softmax to yield a proper probability
+
+    Returns
+    -------
+        A policy with the same size as `legal_actions_mask`
+    """
+
+    legal_actions_mask = np.array(legal_actions_mask, dtype=np.bool)
+    policy = np.zeros(len(legal_actions_mask))
 
     for c in root.children:
         if c.explore_count > 0:
@@ -114,15 +158,24 @@ def compute_mcts_policy_reward(game, state, root, temperature=1):
                 # we have to subtract that here
                 policy[c.action] = c.total_reward / (c.explore_count - 1)
 
+    assert np.sum(
+        policy[~np.array(legal_actions_mask, dtype=np.bool)]) == 0, f"MCTS gave non-zero weight to illegal actions!"
+
     if temperature == 0 or temperature is None:
-        new_policy = np.zeros(game.num_distinct_actions())
+        # Return single-peaked policy with argmax
+        new_policy = np.zeros(len(legal_actions_mask))
+        # Explicitly set illegal actions to -inf as it can happen that policy is all 0
+        # (if no child was explored or all rewards are 0)
+        policy[~legal_actions_mask] = float('-inf')
         new_policy[policy.argmax(-1)] = 1
         policy = new_policy
     else:
         policy = policy ** (1 / temperature)
-        # TODO: Don't normalize but return raw policy scores?
-        policy_exp = np.exp(policy, where=state.legal_actions_mask())
-        policy = policy_exp / np.sum(policy_exp)
+
+        if normalize:
+            # softmax
+            policy_exp = np.exp(policy, where=legal_actions_mask)
+            policy = policy_exp / np.sum(policy_exp)
 
     return policy
 
@@ -145,7 +198,7 @@ def play_one_game(game, bots, temperature, temperature_drop, omniscient_observer
                 current_temperature = 0
 
             if use_reward_policy:
-                policy = compute_mcts_policy_reward(game, state, root, current_temperature)
+                policy = compute_mcts_policy_reward(root, state.legal_actions_mask(), current_temperature)
             else:
                 policy = compute_mcts_policy(game, root, temperature)
 

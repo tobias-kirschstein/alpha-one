@@ -3,7 +3,7 @@ import pyspiel
 from open_spiel.python.algorithms.mcts import SearchNode
 
 from alpha_one.alg.imperfect_information import ImperfectInformationMCTSEvaluator
-from alpha_one.game.information_set import InformationSetGenerator
+from alpha_one.game.information_set import InformationSetGenerator, PUBLIC_OBSERVER_PLAYER_ID
 from alpha_one.game.observer import OmniscientObserver
 
 
@@ -439,6 +439,8 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
             # Evaluator calculates information set and computes a prior probability for guessing each state
             evaluated_information_set = self.evaluator.prior_observation_node(information_set_generator)
             self._random_state.shuffle(evaluated_information_set)
+            assert len(information_set_generator.calculate_information_set()) >= 1, \
+                f"No state in information set, observation history: {information_set_generator.get_observation_history()}"
             for state_id, (state, prior) in enumerate(evaluated_information_set):
                 game_tree_node = ImperfectInformationSearchNode.from_game_tree_node(
                     state_id,
@@ -629,9 +631,23 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
     def _handle_chance_node(self, current_node, information_set_generator, player):
         if self.verbose:
             print(f'chance node select action player {player}')
-        possible_states = information_set_generator.previous_information_set[player]
-        all_action_masks = np.array([state.legal_actions_mask() for state in possible_states])
-        chance_player_actions = np.where(np.sum(all_action_masks, axis=0) > 0)[0]
+        possible_states = dict()
+
+        # Chance_player_actions should only contain the actions of the chance player that are still possible given the
+        # private information of all players. This is fine as the MCTS search does not know the actual information set
+        # of the opponent. Instead, the opponents information set is updated with regard to the root player's first
+        # guess
+        chance_player_actions = None
+        for player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}:
+            possible_states[player_id] = information_set_generator.calculate_information_set(player_id)
+            all_action_masks = np.array([state.legal_actions_mask() for state in possible_states[player_id]])
+            chance_player_actions_p = set(np.where(np.sum(all_action_masks, axis=0) > 0)[0])
+            if chance_player_actions is None:
+                chance_player_actions = chance_player_actions_p
+            else:
+                chance_player_actions = chance_player_actions.intersection(chance_player_actions_p)
+
+        chance_player_actions = np.array(list(chance_player_actions))
         if not current_node.children:
 
             for action in chance_player_actions:
@@ -649,12 +665,22 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
                 current_node.children.append(child_node)
         # For chance nodes, rollout according to chance node's probability
         # distribution
+        # For every legal chance player action, loop through the information set states and add up the probabilities
+        # of that chance player action
         all_chance_outcomes = np.zeros(self._game.max_chance_outcomes())
-        for state in possible_states:
-            for action, prob in state.chance_outcomes():
-                all_chance_outcomes[action] += prob
-        all_chance_outcomes /= len(possible_states)
+        for action in chance_player_actions:
+            for player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}:
+                for state in possible_states[player_id]:
+                    actions, probs = zip(*state.chance_outcomes())
+                    if action in actions:
+                        all_chance_outcomes[action] += probs[actions.index(action)]
+
+        all_chance_outcomes /= np.sum(all_chance_outcomes)
         assert np.sum(all_chance_outcomes) == 1.0, "Chance outcomes should sum to 1"
+        legal_action_mask = np.zeros(len(possible_states[0][0].legal_actions_mask()), dtype=np.bool)
+        legal_action_mask[chance_player_actions] = True
+        assert np.sum(all_chance_outcomes[~legal_action_mask]) == 0, "Chance player about to select an illegal action"
+
         action = self._random_state.choice(range(self._game.max_chance_outcomes()),
                                            p=all_chance_outcomes)
         cc = next(
