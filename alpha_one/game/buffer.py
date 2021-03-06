@@ -42,8 +42,9 @@ class ReplayBuffer(object):
         -------
             A random sample of data entries drawn from the buffer
         """
+        assert (n_most_recent is None or not n_most_recent or n_most_recent == 0) or count < n_most_recent, f"n_most_recent {n_most_recent} must be larger than count {count}"
 
-        sampled_train_inputs = random.sample(self.data[-n_most_recent:], count)
+        sampled_train_inputs = random.sample(self.data[-n_most_recent:], min(count, len(self.data)))
         if observation_key is not None:
             # There are multiple observations in the game trajectory. We have to pick one to feed into the model
             sampled_train_inputs = [

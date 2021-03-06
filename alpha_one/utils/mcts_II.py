@@ -103,7 +103,7 @@ def ii_mcts_agent(information_set_generator, mcts_config: IIGMCTSConfig, bot):
     return state_masked_policy, game_node_policy, guessed_state, state_mask
 
 
-def play_one_game_alphaone(game, bots, mcts_config: IIGMCTSConfig):
+def play_one_game_alphaone(game, bots, mcts_config: IIGMCTSConfig, use_teacher_forcing=False):
     trajectory_observation = GameTrajectory(game)
     trajectory_game = GameTrajectory(game, omniscient_observer=True)
     state = game.new_initial_state()
@@ -137,6 +137,11 @@ def play_one_game_alphaone(game, bots, mcts_config: IIGMCTSConfig):
 
             assert np.sum(state_mask) == len(
                 information_set_generator.calculate_information_set()), f"State mask should reflect information set"
+
+            if use_teacher_forcing:
+                state_masked_policy = np.zeros(len(mcts_config.state_to_value))
+                state_masked_policy[mcts_config.state_to_value[state.__str__()]] = 1
+
             trajectory_observation.states.append(TrajectoryState(state.observation_tensor(),
                                                                  state.current_player(),
                                                                  state_mask,

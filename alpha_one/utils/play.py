@@ -6,7 +6,7 @@ from alpha_one.game.information_set import InformationSetGenerator
 from alpha_one.game.observer import OmniscientObserver
 
 
-class InteractiveGameMachine:
+class GameMachine:
 
     def __init__(self, game: Union[str, pyspiel.Game]):
         self.game = pyspiel.load_game(game) if isinstance(game, str) else game
@@ -39,9 +39,7 @@ class InteractiveGameMachine:
         omniscient_observation = self.omniscient_observer.get_observation_tensor(self.state)
         return player_observation, omniscient_observation
 
-    def await_action(self):
-        human_input = input()
-        action = int(human_input)
+    def play_action(self, action: int):
         self.state.apply_action(action)
         self.information_set_generator.register(self.state, action)
 
@@ -51,3 +49,14 @@ class InteractiveGameMachine:
             return True
         else:
             return False
+
+
+class InteractiveGameMachine(GameMachine):
+
+    def __init__(self, game: Union[str, pyspiel.Game]):
+        super(InteractiveGameMachine, self).__init__(game)
+
+    def await_action(self):
+        human_input = input()
+        action = int(human_input)
+        self.play_action(action)

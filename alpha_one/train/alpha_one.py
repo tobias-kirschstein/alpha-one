@@ -35,18 +35,20 @@ class Losses(collections.namedtuple("Losses", "policy value l2")):
 
 
 @ray.remote(num_returns=1)
-def _generate_one_game_parallel(game, checkpoint_manager: Dict[str, CheckpointManager], mcts_config: IIGMCTSConfig):
+def _generate_one_game_parallel(game, checkpoint_manager: Dict[str, CheckpointManager], mcts_config: IIGMCTSConfig,
+                                use_teacher_forcing=False):
     # Tensorflow models are not pickeable. Hence, the worker has to load the model from the disk
 
     model_current_best = [checkpoint_manager["observation_model_manager"].load_checkpoint(-1),
                           checkpoint_manager["game_model_manager"].load_checkpoint(-1)]
-    return _generate_one_game(game, model_current_best, mcts_config)
+    return _generate_one_game(game, model_current_best, mcts_config, use_teacher_forcing=use_teacher_forcing)
 
 
-def _generate_one_game(game, model_current_best, mcts_config: IIGMCTSConfig):
+def _generate_one_game(game, model_current_best, mcts_config: IIGMCTSConfig, use_teacher_forcing=False):
     bot = initialize_bot_alphaone(game, model_current_best, mcts_config)
 
-    trajectory_observation, trajectory_game = play_one_game_alphaone(game, [bot, bot], mcts_config)
+    trajectory_observation, trajectory_game = play_one_game_alphaone(game, [bot, bot], mcts_config,
+                                                                     use_teacher_forcing=use_teacher_forcing)
 
     p1_outcome = trajectory_game.get_final_reward(0)
     p1_outcome = p1_outcome / game.max_utility() if p1_outcome > 0 else p1_outcome / -game.min_utility()
@@ -99,7 +101,8 @@ class AlphaOneTrainManager:
             print("AlphaZero Train manager will use parallelism")
         # self.omniscient_observer = checkpoint_manager.load_config().omniscient_observer
 
-    def generate_training_data(self, n_games_train: int, n_games_valid: int, mcts_config: IIGMCTSConfig):
+    def generate_training_data(self, n_games_train: int, n_games_valid: int, mcts_config: IIGMCTSConfig,
+                               use_teacher_forcing=False):
         train_game_samples = []
         train_observation_samples = []
 
@@ -111,13 +114,15 @@ class AlphaOneTrainManager:
 
                 observation_samples, game_samples = _generate_one_game_parallel.remote(game=self.game,
                                                                                        checkpoint_manager=self.checkpoint_manager,
-                                                                                       mcts_config=mcts_config)
+                                                                                       mcts_config=mcts_config,
+                                                                                       use_teacher_forcing=use_teacher_forcing)
                 train_observation_samples.append(observation_samples)
                 train_game_samples.append(game_samples)
             else:
                 observation_samples, game_samples = _generate_one_game(game=self.game,
                                                                        model_current_best=self.model_current_best,
-                                                                       mcts_config=mcts_config)
+                                                                       mcts_config=mcts_config,
+                                                                       use_teacher_forcing=use_teacher_forcing)
 
                 train_observation_samples.append(observation_samples)
                 train_game_samples.append(game_samples)
@@ -126,14 +131,16 @@ class AlphaOneTrainManager:
             if self.use_parallelism:
                 observation_samples, game_samples = _generate_one_game_parallel.remote(game=self.game,
                                                                                        checkpoint_manager=self.checkpoint_manager,
-                                                                                       mcts_config=mcts_config)
+                                                                                       mcts_config=mcts_config,
+                                                                                       use_teacher_forcing=use_teacher_forcing)
 
                 valid_observation_samples.append(observation_samples)
                 valid_game_samples.append(game_samples)
             else:
                 observation_samples, game_samples = _generate_one_game(game=self.game,
                                                                        model_current_best=self.model_current_best,
-                                                                       mcts_config=mcts_config)
+                                                                       mcts_config=mcts_config,
+                                                                       use_teacher_forcing=use_teacher_forcing)
 
                 valid_observation_samples.append(observation_samples)
                 valid_game_samples.append(game_samples)
@@ -167,18 +174,20 @@ class AlphaOneTrainManager:
 
         return train_observation_samples, valid_observation_samples, train_game_samples, valid_game_samples
 
-    def train_model(self, n_train_steps, n_valid_steps, batch_size, weight_decay):
+    def train_model(self, n_train_steps_obs, n_train_steps_game, n_valid_steps, batch_size, weight_decay_obs,
+                    weight_decay_game):
         train_observation_losses = []
         valid_observation_losses = []
 
         train_game_losses = []
         valid_game_losses = []
 
-        for _ in range(n_train_steps):
+        for _ in range(n_train_steps_obs):
             sampled_train_observation_inputs = self.replay_buffer_observation.sample(batch_size, None)
             loss = self.model_challenger[0].update(sampled_train_observation_inputs)
             train_observation_losses.append(loss)
 
+        for _ in range(n_train_steps_game):
             sampled_train_game_inputs = self.replay_buffer_model.sample(batch_size, 'omniscient_observation')
             loss = self.model_challenger[1].update(sampled_train_game_inputs)
             train_game_losses.append(loss)
@@ -193,7 +202,7 @@ class AlphaOneTrainManager:
             value_loss = np.mean((values - np.array([[sample.value] for sample in valid_observation_samples])) ** 2)
             policy_loss = np.mean(
                 cross_entropy(np.array([sample.policy for sample in valid_observation_samples]), policies))
-            reg_loss = sum([weight_decay * np.linalg.norm(var.eval())
+            reg_loss = sum([weight_decay_obs * np.linalg.norm(var.eval())
                             for var in tf.compat.v1.trainable_variables()
                             if "/bias:" not in var.name])
             valid_observation_losses.append(Losses(policy_loss, value_loss, reg_loss))
@@ -206,7 +215,7 @@ class AlphaOneTrainManager:
 
             value_loss = np.mean((values - np.array([[sample.value] for sample in valid_game_samples])) ** 2)
             policy_loss = np.mean(cross_entropy(np.array([sample.policy for sample in valid_game_samples]), policies))
-            reg_loss = sum([weight_decay * np.linalg.norm(var.eval())
+            reg_loss = sum([weight_decay_game * np.linalg.norm(var.eval())
                             for var in tf.compat.v1.trainable_variables()
                             if "/bias:" not in var.name])
             valid_game_losses.append(Losses(policy_loss, value_loss, reg_loss))
@@ -241,7 +250,7 @@ class AlphaOneTrainManager:
                                                                            self.get_player_name_challenger())
 
             self.model_current_best = [
-                self.checkpoint_manager["observation_model_manager"].load_checkpoint(self.get_player_name_challenger()), \
+                self.checkpoint_manager["observation_model_manager"].load_checkpoint(self.get_player_name_challenger()),
                 self.checkpoint_manager["game_model_manager"].load_checkpoint(self.get_player_name_challenger())]
 
             ratings_challenger = [rating_system.get_rating(self.get_player_name_challenger())

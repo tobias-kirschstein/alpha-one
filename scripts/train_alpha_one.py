@@ -30,9 +30,10 @@ store_replays_every = 10
 # Model update
 n_most_recent_train_samples = 50000  # Among which training samples to choose to train current model
 n_most_recent_valid_samples = 50000
-n_train_steps = 40  # After how many gradient updates the new model tries to beat the current best
+n_train_steps_obs = 800  # Gradient updates for observation model
+n_train_steps_game = 40  # Gradient updates for game model
 n_valid_steps = 10
-batch_size = 8
+batch_size = 32
 
 # Evaluation
 n_evaluations = 10  # How many games should be played to measure which model is better
@@ -53,13 +54,20 @@ temperature_drop = 10
 alpha_one = True
 omniscient_observer = True  # Whether the game model should have total information of the state it guessed
 use_reward_policy = True  # Whether the total rewards of nodes should be taken into account when constructing policies, or only the explore_counts
+use_teacher_forcing = True  # Whether the true game states should be used as label for the observation model, or the guessing policy of the IIG-MCTS
 
 # Model Hyperparameters
-model_type = 'mlp'
-nn_width = 64
-nn_depth = 2
-weight_decay = 1e-5
-learning_rate = 1e-5
+model_type_obs = 'mlp'
+nn_width_obs = 128
+nn_depth_obs = 4
+weight_decay_obs = 1e-5
+learning_rate_obs = 1e-2
+
+model_type_game = 'mlp'
+nn_width_game = 64
+nn_depth_game = 2
+weight_decay_game = 1e-5
+learning_rate_game = 1e-5
 
 # =========================================================================
 # END Settings
@@ -105,7 +113,8 @@ hyperparameters = dict(
 
     n_most_recent_train_samples=n_most_recent_train_samples,
     n_most_recent_valid_samples=n_most_recent_valid_samples,
-    n_train_steps=n_train_steps,
+    n_train_steps_obs=n_train_steps_obs,
+    n_train_steps_game=n_train_steps_game,
     n_valid_steps=n_valid_steps,
     batch_size=batch_size,
 
@@ -118,15 +127,22 @@ hyperparameters = dict(
     temperature=temperature,
     temperature_drop=temperature_drop,
 
-    model_type=model_type,
-    nn_width=nn_width,
-    nn_depth=nn_depth,
-    weight_decay=weight_decay,
-    learning_rate=learning_rate,
+    model_type_obs=model_type_obs,
+    nn_width_obs=nn_width_obs,
+    nn_depth_obs=nn_depth_obs,
+    weight_decay_obs=weight_decay_obs,
+    learning_rate_obs=learning_rate_obs,
+
+    model_type_game=model_type_game,
+    nn_width_game=nn_width_game,
+    nn_depth_game=nn_depth_game,
+    weight_decay_game=weight_decay_game,
+    learning_rate_game=learning_rate_game,
 
     omniscient_observer=omniscient_observer,
     use_reward_policy=use_reward_policy,
-    optimism=optimism
+    optimism=optimism,
+    use_teacher_forcing=use_teacher_forcing
 )
 
 
@@ -144,24 +160,24 @@ if __name__ == '__main__':
     # Setup Model Manager
     observation_model_config = OpenSpielModelConfig(
         game,
-        model_type,
+        model_type_obs,
         game.observation_tensor_shape(),
-        nn_width,
-        nn_depth,
-        weight_decay,
-        learning_rate,
+        nn_width_obs,
+        nn_depth_obs,
+        weight_decay_obs,
+        learning_rate_obs,
         omniscient_observer=False, output_shape=len(state_to_value_dict))
     observation_model_manager = OpenSpielCheckpointManager(game_name, f"{run_name}-observation_model")
     observation_model_manager.store_config(observation_model_config)
 
     game_model_config = OpenSpielModelConfig(
         game,
-        model_type,
+        model_type_game,
         get_observation_tensor_shape(game, omniscient_observer),
-        nn_width,
-        nn_depth,
-        weight_decay,
-        learning_rate,
+        nn_width_game,
+        nn_depth_game,
+        weight_decay_game,
+        learning_rate_game,
         omniscient_observer=omniscient_observer)
     game_model_manager = OpenSpielCheckpointManager(game_name, f"{run_name}-game_model")
     game_model_manager.store_config(game_model_config)
@@ -199,7 +215,8 @@ if __name__ == '__main__':
         new_train_observation_samples, \
         new_valid_observation_samples, \
         new_train_game_samples, \
-        new_valid_game_samples = train_manager.generate_training_data(n_games_train, n_games_valid, mcts_config)
+        new_valid_game_samples = train_manager.generate_training_data(n_games_train, n_games_valid, mcts_config,
+                                                                      use_teacher_forcing=use_teacher_forcing)
         print(
             f'  - Generated {len(new_train_observation_samples)} additional training observation samples and {len(new_valid_observation_samples)} additional validation observation samples')
         print(
@@ -213,7 +230,8 @@ if __name__ == '__main__':
         train_observation_losses, \
         valid_observation_losses, \
         train_game_losses, \
-        valid_game_losses = train_manager.train_model(n_train_steps, n_valid_steps, batch_size, weight_decay)
+        valid_game_losses = train_manager.train_model(n_train_steps_obs, n_train_steps_game, n_valid_steps, batch_size,
+                                                      weight_decay_obs, weight_decay_game)
         print(
             f'  - Training Observation Model: {mean_total_loss(train_observation_losses[:int(len(train_observation_losses) / 4)]):.2f} \
                 -> {mean_total_loss(train_observation_losses[int(len(train_observation_losses) / 4):int(2 * len(train_observation_losses) / 4)]):.2f} \
