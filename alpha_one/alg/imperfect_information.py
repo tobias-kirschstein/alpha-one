@@ -89,7 +89,7 @@ class AlphaOneImperfectInformationMCTSEvaluator(ImperfectInformationMCTSEvaluato
     def evaluate(self, state):
 
         if state is None:
-        	return [0, 0]
+            return [0, 0]
         
         elif state.is_chance_node():
             return [0, 0]

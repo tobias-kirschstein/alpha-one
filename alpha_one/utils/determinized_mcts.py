@@ -6,6 +6,7 @@ from alpha_one.utils.mcts import MCTSConfig, compute_mcts_policy_new, compute_mc
 from alpha_one.alg.imperfect_information import DeterminizedMCTSEvaluator
 from alpha_one.game.trajectory import GameTrajectory
 from alpha_one.game.information_set import InformationSetGenerator
+from open_spiel.python.algorithms.mcts import RandomRolloutEvaluator
 
 
 def initialize_bot(game, model, mcts_config: MCTSConfig):
@@ -29,7 +30,27 @@ def initialize_bot(game, model, mcts_config: MCTSConfig):
     
     return bot
 
-def compute_mcts_policy(game, model, state, information_set_generator, mcts_config: MCTSConfig):
+def initialize_rollout_dmcts_bot(game, n_rollouts, mcts_config: MCTSConfig):
+    if mcts_config.policy_epsilon == None or mcts_config.policy_alpha == None:
+        noise = None
+    else:
+        noise = (mcts_config.policy_epsilon, mcts_config.policy_alpha)
+
+    evaluator = RandomRolloutEvaluator(n_rollouts)
+
+    bot = mcts.MCTSBot(
+        game,
+        mcts_config.uct_c,
+        mcts_config.max_mcts_simulations,
+        evaluator,
+        solve=False,
+        dirichlet_noise=noise,
+        child_selection_fn=mcts.SearchNode.puct_value,
+        verbose=False)
+
+    return bot
+
+def compute_mcts_policy(game, model, state, information_set_generator, mcts_config: MCTSConfig, use_NN=True, n_rollouts=None):
 
     current_player = state.current_player()
     information_set = information_set_generator.calculate_information_set(current_player)
@@ -37,8 +58,11 @@ def compute_mcts_policy(game, model, state, information_set_generator, mcts_conf
     legal_actions_mask = np.array(state.legal_actions_mask(), dtype=np.bool)
 
     for s in information_set:
-        bot = initialize_bot(game, model, mcts_config)
-
+        if use_NN:
+            bot = initialize_bot(game, model, mcts_config)
+        else:
+            bot = initialize_rollout_dmcts_bot(game, n_rollouts, mcts_config)
+        
         root = bot.mcts_search(s)
 
         if mcts_config.use_reward_policy:

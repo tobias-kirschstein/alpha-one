@@ -25,10 +25,9 @@ from env import MODEL_SAVES_DIR, LOGS_DIR
 
 
 # The training is done in a similar way as AlphaZero.
-# 
-# Some Remarks:
-# 1. determinized_MCTS and omniscient_observer in MCTSConfig should be set to "True" while training
-# 2. See AlphaZeroTrainManager and utilis/determinized_mcts for debugging
+# First the NN is trained in a cheating manner same as alphazero
+# While evaluating, the trained cheating NN is used to guide the MCTS tree in D-MCTS algorithm when evaluating all the states in information set
+# See AlphaZeroTrainManager and utilis/determinized_mcts for debugging
 
 
 game_name = 'leduc_poker'
@@ -66,12 +65,12 @@ temperature_drop = 10
 
 omniscient_observer = True
 use_reward_policy = True
-determinized_MCTS = True
+determinized_mcts = True
 
 
 
-mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, temperature, temperature_drop, policy_epsilon, policy_alpha, determinized_MCTS=determinized_MCTS, omniscient_observer=omniscient_observer, use_reward_policy=use_reward_policy)
-evaluation_mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, 0, None, None, None, determinized_MCTS=determinized_MCTS, omniscient_observer=omniscient_observer, use_reward_policy=use_reward_policy)
+mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, temperature, temperature_drop, policy_epsilon, policy_alpha, omniscient_observer=omniscient_observer, use_reward_policy=use_reward_policy)
+evaluation_mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, 0, None, None, None, determinized_mcts=determinized_mcts, omniscient_observer=omniscient_observer, use_reward_policy=use_reward_policy)
 
 
 # Model Hyperparameters
@@ -112,9 +111,9 @@ hyperparameters = dict(
     nn_depth=nn_depth,
     weight_decay=weight_decay,
     learning_rate=learning_rate,
-    
+    determinized_mcts = determinized_mcts,
     omniscient_observer=omniscient_observer,
-    determinized_MCTS=determinized_MCTS
+    use_reward_policy=use_reward_policy
 )
 
 
