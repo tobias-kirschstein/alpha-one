@@ -3,16 +3,17 @@ import numpy as np
 from alpha_one.game.information_set import InformationSetGenerator
 from alpha_one.model.agent import MCTSAgent
 from alpha_one.model.agent.base import Agent
-from alpha_one.utils.determinized_mcts import initialize_bot
+from alpha_one.utils.determinized_mcts import initialize_bot, initialize_rollout_dmcts_bot
 from alpha_one.utils.mcts import MCTSConfig
 
 
 class DMCTSAgent(Agent):
 
-    def __init__(self, model, mcts_config: MCTSConfig):
+    def __init__(self, model, mcts_config: MCTSConfig, n_rollouts=None):
         super(DMCTSAgent, self).__init__(is_information_set_agent=True)
         self._model = model
         self._mcts_config = mcts_config
+        self._n_rollouts = n_rollouts
 
     def next_move(self, information_set_generator: InformationSetGenerator) -> (int, np.array):
         current_player = information_set_generator.current_player()
@@ -24,7 +25,11 @@ class DMCTSAgent(Agent):
         # are summed across all trees,
         # and an action is chosen that maximises the total number of visits.
         for s in information_set:
-            bot = initialize_bot(information_set_generator.game, self._model, self._mcts_config)
+            if self._model is None and self._n_rollouts is not None:
+                bot = initialize_rollout_dmcts_bot(information_set_generator.game, self._n_rollouts, self._mcts_config)
+            else:
+                bot = initialize_bot(information_set_generator.game, self._model, self._mcts_config)
+            
             mcts_agent = MCTSAgent(information_set_generator.game, bot, self._mcts_config.temperature,
                                    temperature_drop=self._mcts_config.temperature_drop,
                                    use_reward_policy=self._mcts_config.use_reward_policy)
