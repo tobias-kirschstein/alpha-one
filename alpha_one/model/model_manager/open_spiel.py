@@ -4,6 +4,7 @@ from open_spiel.python.algorithms.alpha_zero import model as model_lib
 
 from .base import CheckpointManager, ModelManager
 from ..config import OpenSpielModelConfig
+from ...data.replay import ReplayDataManager
 from ...utils.io import list_file_numbering
 
 
@@ -17,6 +18,9 @@ class OpenSpielCheckpointManager(CheckpointManager):
 
     def __init__(self, game_name, run_name):
         super(OpenSpielCheckpointManager, self).__init__(game_name, run_name)
+
+    def get_replay_data_manager(self):
+        return ReplayDataManager(self.model_store_path)
 
     def store_checkpoint(self, model, iteration):
         Path(self.model_store_path).mkdir(parents=True, exist_ok=True)

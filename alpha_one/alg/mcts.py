@@ -715,9 +715,12 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
                 solved = self.solve
             elif leaf_node.is_game_tree_node():
                 returns = self.evaluator.evaluate(leaf_node.state)
+                # Account for games with higher rewards
+                returns = [returns[0] * self._game.max_utility(), returns[1] * self._game.max_utility()]
                 solved = False
             elif leaf_node.is_observation_tree_node():
                 returns = self.evaluator.evaluate_observation_node(leaf_node.information_set_generator)
+                returns = [returns[0] * self._game.max_utility(), returns[1] * self._game.max_utility()]
                 solved = False
 
             returns_root = None
@@ -733,9 +736,11 @@ class ImperfectInformationMCTSBot(pyspiel.Bot):
                 solved_root = self.solve
             elif leaf_node_root.is_game_tree_node():
                 returns_root = self.evaluator.evaluate(leaf_node_root.state)
+                returns_root = [returns_root[0] * self._game.max_utility(), returns_root[1] * self._game.max_utility()]
                 solved_root = False
             elif leaf_node_root.is_observation_tree_node():
                 returns_root = self.evaluator.evaluate_observation_node(leaf_node_root.information_set_generator)
+                returns_root = [returns_root[0] * self._game.max_utility(), returns_root[1] * self._game.max_utility()]
                 solved_root = False
 
             root.player = root_player  # Technically, we don't know which player caused the root action
