@@ -49,14 +49,14 @@ n_valid_steps = 10
 batch_size = 8
 
 # Evaluation
-n_evaluations = 10                    # How many games should be played to measure which model is better
+n_evaluations = 100                    # How many games should be played to measure which model is better
 evaluation_strategy = 'mcts'           # 'best_response'
 win_ratio_needed = None #0.55                # Minimum win ratio that the challenger model needs in order to supersede the current best model
 average_reward_needed = 0.2            # Minimum average reward over current best model that the challenger model needs in order to supersede the current best model. Mutually exclusive with win_ratio_needed
 
 # MCTS config
-UCT_C = math.sqrt(2)
-max_mcts_simulations = 100
+UCT_C = 5
+max_mcts_simulations = 10
 
 policy_epsilon = None #0.25            # What noise epsilon to use
 policy_alpha = None #1                 # What dirichlet noise alpha to use
@@ -81,7 +81,7 @@ model_type = 'mlp'
 nn_width = 128
 nn_depth = 4
 weight_decay = 1e-5
-learning_rate = 1e-5
+learning_rate = 1e-3
 
 
 hyperparameters = dict(
