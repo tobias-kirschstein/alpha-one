@@ -12,7 +12,6 @@ from alpha_one.metrics import cross_entropy, RatingSystem
 from alpha_one.model.evaluation import EvaluationManager, ParallelEvaluationManager
 from alpha_one.model.model_manager import CheckpointManager
 from alpha_one.utils.mcts import initialize_bot, play_one_game, MCTSConfig
-from alpha_one.utils.determinized_mcts import play_one_game_d
 
 
 class Losses(collections.namedtuple("Losses", "policy value l2")):
@@ -43,17 +42,13 @@ def _generate_one_game_parallel(game, checkpoint_manager: CheckpointManager, mct
 
 
 def _generate_one_game(game, model_current_best, mcts_config: MCTSConfig):
-    if mcts_config.determinized_MCTS:
-        trajectory = play_one_game_d(game, [model_current_best, model_current_best], mcts_config)
+    bot = initialize_bot(game, model_current_best, mcts_config.uct_c,
+                         mcts_config.max_mcts_simulations, mcts_config.policy_epsilon,
+                         mcts_config.policy_alpha, omniscient_observer=mcts_config.omniscient_observer)
 
-    else:
-        bot = initialize_bot(game, model_current_best, mcts_config.uct_c,
-                             mcts_config.max_mcts_simulations, mcts_config.policy_epsilon,
-                             mcts_config.policy_alpha, omniscient_observer=mcts_config.omniscient_observer)
-
-        trajectory = play_one_game(game, [bot, bot], mcts_config.temperature, mcts_config.temperature_drop,
-                                   omniscient_observer=mcts_config.omniscient_observer,
-                                   use_reward_policy=mcts_config.use_reward_policy)
+    trajectory = play_one_game(game, [bot, bot], mcts_config.temperature, mcts_config.temperature_drop,
+                                omniscient_observer=mcts_config.omniscient_observer,
+                                use_reward_policy=mcts_config.use_reward_policy)
 
     p1_outcome = trajectory.get_final_reward(0)
     # Squeeze target value (rewards) into [-1, 1], as value head typically has a tanh activation function

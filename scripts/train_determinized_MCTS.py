@@ -24,13 +24,14 @@ from alpha_one.data.replay import ReplayDataManager
 from env import MODEL_SAVES_DIR, LOGS_DIR
 
 
-NUM_CPUS = 1
+# The training is done in a similar way as AlphaZero.
+# First the NN is trained in a cheating manner same as alphazero
+# While evaluating, the trained cheating NN is used to guide the MCTS tree in D-MCTS algorithm when evaluating the states in information set
+# See AlphaZeroTrainManager and utilis/determinized_mcts for debugging
 
 
-
-game_name = 'kuhn_poker'
-game_prefix = 'KP-local'
-
+game_name = 'leduc_poker'
+game_prefix = 'LP-local'
 
 
 n_iterations = 50                     # How often the whole procedure is repeated. Also corresponds to the number of evaluations
@@ -43,7 +44,7 @@ store_replays_every = 10
 # Model update
 n_most_recent_train_samples = 50000    # Among which training samples to choose to train current model
 n_most_recent_valid_samples = 50000
-n_train_steps = 40                     # After how many gradient updates the new model tries to beat the current best
+n_train_steps = 100                     # After how many gradient updates the new model tries to beat the current best
 n_valid_steps = 10
 batch_size = 8
 
@@ -62,26 +63,25 @@ policy_alpha = None #1                 # What dirichlet noise alpha to use
 
 temperature = 1
 temperature_drop = 10
-omniscient_observer = True
 
+omniscient_observer = True
+use_reward_policy = True
 determinized_MCTS = True
 
 assert win_ratio_needed is None and average_reward_needed is not None \
        or win_ratio_needed is not None and average_reward_needed is None, \
     f"win_ratio_needed and average_reward_needed are mutually exclusive"
 
-mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, temperature, temperature_drop, policy_epsilon, policy_alpha, determinized_MCTS=determinized_MCTS, omniscient_observer=omniscient_observer)
-evaluation_mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, 0, None, None, None, determinized_MCTS=determinized_MCTS, omniscient_observer=omniscient_observer)
-
+mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, temperature, temperature_drop, policy_epsilon, policy_alpha, omniscient_observer=omniscient_observer, use_reward_policy=use_reward_policy)
+evaluation_mcts_config = MCTSConfig(UCT_C, max_mcts_simulations, 0, None, None, None, determinized_MCTS=determinized_MCTS, omniscient_observer=omniscient_observer, use_reward_policy=use_reward_policy)
 
 
 # Model Hyperparameters
 model_type = 'mlp'
-nn_width = 64
-nn_depth = 2
+nn_width = 128
+nn_depth = 4
 weight_decay = 1e-5
 learning_rate = 1e-5
-
 
 
 hyperparameters = dict(
@@ -114,20 +114,14 @@ hyperparameters = dict(
     nn_depth=nn_depth,
     weight_decay=weight_decay,
     learning_rate=learning_rate,
-    
+    determinized_MCTS = determinized_MCTS,
     omniscient_observer=omniscient_observer,
-    determinized_MCTS=determinized_MCTS
+    use_reward_policy=use_reward_policy
 )
-
 
 
 def mean_total_loss(losses):
     return mean([loss.total for loss in losses])
-
-
-if not ray.is_initialized() and NUM_CPUS > 1:
-    ray.init(num_cpus=NUM_CPUS)
-
 
 
 # Setup model and game
@@ -166,7 +160,6 @@ train_manager = AlphaZeroTrainManager(game, model_manager, evaluation_manager, n
 
 print("Num variables:", train_manager.model_challenger.num_trainable_variables)
 train_manager.model_challenger.print_trainable_variables()
-
 
 
 tensorboard = TensorboardLogger(f"{LOGS_DIR}/{game_name}/{run_name}")
@@ -241,3 +234,7 @@ for iteration in range(1, n_iterations + 1):
     
     
     tensorboard.flush()
+
+
+
+
