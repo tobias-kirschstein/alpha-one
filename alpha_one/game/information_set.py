@@ -147,6 +147,23 @@ class InformationSetGenerator:
         assert player_id in {0, 1, PUBLIC_OBSERVER_PLAYER_ID}, f"Invalid player id {player_id}"
         return self.observation_history[player_id]
 
+    def get_padded_observation_history(self, n_previous_observations: int, player_id: int = None, ):
+        observation_history = self.get_observation_history(player_id=player_id)[-n_previous_observations:]
+        observation_padding = n_previous_observations - len(observation_history)
+        padded_history = [0 for _ in range(self.game.observation_tensor_shape()[0] * observation_padding)]
+        for observation in observation_history:
+            padded_history.extend(observation)
+        return padded_history
+
+    def get_legal_actions_mask(self, player_id: int = None):
+        if player_id is None:
+            player_id = self.current_player()
+
+        if player_id in self.previous_information_set:
+            return self.previous_information_set[player_id][0].legal_actions_mask(player_id)
+        else:
+            return self.game.new_initial_state().legal_actions_mask(player_id)
+
     def calculate_information_set(self, player_id: int = None) -> List[pyspiel.State]:
         if player_id is None:
             player_id = self.current_player()
@@ -164,6 +181,11 @@ class InformationSetGenerator:
                                                           player_id,
                                                           self._observation_buffer[player_id],
                                                           self.action_history[player_id])
+
+        assert information_set[0].current_player() < 0 or \
+               all([s.legal_actions_mask() == information_set[0].legal_actions_mask() for s in information_set]), \
+            f"All states in information set have to have the same legal actions mask!"
+
         self.previous_information_set[player_id] = information_set
         self.action_history[player_id] = []
         self._observation_buffer[player_id] = []

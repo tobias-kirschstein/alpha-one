@@ -1,4 +1,5 @@
 import copy
+from statistics import mean
 
 from alpha_one.metrics import MatchOutcome
 from alpha_one.model.model_manager import CheckpointManager
@@ -83,7 +84,8 @@ class EvaluationManager:
 
         n_model_1_wins = (np.array(model_1_results) > 0).sum()
         model_1_win_rate = n_model_1_wins / self.n_evaluations
-        return model_1_win_rate, trajectories, match_outcomes
+        model_1_average_reward = mean(model_1_results)
+        return model_1_win_rate, trajectories, match_outcomes, model_1_average_reward
 
 
 class ParallelEvaluationManager:
@@ -122,4 +124,5 @@ class ParallelEvaluationManager:
 
         n_model_1_wins = (np.array(model_1_results) > 0).sum()
         model_1_win_rate = n_model_1_wins / self.n_evaluations
-        return model_1_win_rate, trajectories, match_outcomes
+        model_1_average_reward = mean(model_1_results)
+        return model_1_win_rate, trajectories, match_outcomes, model_1_average_reward

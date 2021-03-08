@@ -8,6 +8,7 @@ import pyspiel
 class PolicyGradientAgent(Agent):
 
     def __init__(self, policy_gradient_model: PolicyGradient):
+        super(PolicyGradientAgent, self).__init__(is_information_set_agent=False)
         self.policy_gradient_model = policy_gradient_model
 
     def next_move(self, state: pyspiel.State) -> (int, np.array):

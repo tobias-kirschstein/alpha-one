@@ -169,9 +169,10 @@ class AlphaZeroTrainManager:
             # Hack: store challenger model as checkpoint '-2' as Tensorflow models cannot be pickled (and thus
             # cannot be sent to the Ray workers). Instead, the ray workers have to load the models from disk
             self.checkpoint_manager.store_checkpoint(self.model_challenger, -2)
-            challenger_win_rate, trajectories, match_outcomes = self.evaluation_manager.compare_models(-2, -1)
+            challenger_win_rate, trajectories, match_outcomes, challenger_average_reward = self.evaluation_manager.compare_models(
+                -2, -1)
         else:
-            challenger_win_rate, trajectories, match_outcomes = self.evaluation_manager.compare_models(
+            challenger_win_rate, trajectories, match_outcomes, challenger_average_reward = self.evaluation_manager.compare_models(
                 self.model_challenger, self.model_current_best)
 
         challenger_policies = [state.policy
@@ -182,10 +183,16 @@ class AlphaZeroTrainManager:
                                2: self.get_player_name_current_best()}
         match_outcomes = [match_outcome.with_renamed_players(player_name_mapping) for match_outcome in match_outcomes]
 
-        return challenger_win_rate, challenger_policies, match_outcomes
+        return challenger_win_rate, challenger_policies, match_outcomes, challenger_average_reward
 
-    def replace_model_with_challenger(self, challenger_win_rate: float, win_ratio_needed: float):
-        if challenger_win_rate > win_ratio_needed:
+    def replace_model_with_challenger(self, challenger_win_rate: float, win_ratio_needed: float,
+                                      challenger_average_reward: float, average_reward_needed: float):
+        if win_ratio_needed is not None:
+            supersedes = challenger_win_rate > win_ratio_needed
+        elif average_reward_needed is not None:
+            supersedes = challenger_average_reward > average_reward_needed
+
+        if supersedes:
             self.checkpoint_manager.store_checkpoint(self.model_challenger, self.get_player_name_challenger())
             self.model_current_best = self.checkpoint_manager.load_checkpoint(self.get_player_name_challenger())
             ratings_challenger = [rating_system.get_rating(self.get_player_name_challenger())

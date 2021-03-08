@@ -24,6 +24,8 @@ class IIGMCTSConfig(MCTSConfig):
                  determinized_MCTS: bool = False,
                  alpha_one: bool = False,
                  state_to_value=None,
+                 n_previous_observations=1,
+                 optimism=1,
                  **kwargs):
         super(IIGMCTSConfig, self).__init__(
             uct_c=uct_c,
@@ -37,6 +39,8 @@ class IIGMCTSConfig(MCTSConfig):
             determinized_MCTS=determinized_MCTS,
             alpha_one=alpha_one,
             state_to_value=state_to_value,
+            n_previous_observations=n_previous_observations,
+            optimism=optimism,
             **kwargs)
 
 
@@ -47,7 +51,8 @@ def initialize_bot_alphaone(game, model, mcts_config: IIGMCTSConfig):
     else:
         noise = (mcts_config.policy_epsilon, mcts_config.policy_alpha)
 
-    evaluator = AlphaOneImperfectInformationMCTSEvaluator(game, mcts_config.state_to_value, model[0], model[1])
+    evaluator = AlphaOneImperfectInformationMCTSEvaluator(game, mcts_config.state_to_value, model[0], model[1],
+                                                          n_previous_observations=mcts_config.n_previous_observations)
 
     bot = ImperfectInformationMCTSBot(game,
                                       mcts_config.uct_c,
@@ -63,13 +68,13 @@ def initialize_bot_alphaone(game, model, mcts_config: IIGMCTSConfig):
 
 
 # get policy and value at the observation node
-def get_policy_value_obs_node(root, state_mask, index_track, mcts_config: IIGMCTSConfig):
+def get_policy_value_obs_node(root, state_mask, index_track, temperature, use_reward_policy):
     # state_mask and state_masked_policy are used while training NN
 
-    if mcts_config.use_reward_policy:
-        policy = compute_mcts_policy_reward(root, np.ones(len(root.children)), temperature=mcts_config.temperature)
+    if use_reward_policy:
+        policy = compute_mcts_policy_reward(root, np.ones(len(root.children)), temperature=temperature)
     else:
-        policy = compute_mcts_policy_new(root, np.ones(len(root.children)), temperature=mcts_config.temperature)
+        policy = compute_mcts_policy_new(root, np.ones(len(root.children)), temperature=temperature)
 
     state_masked_policy = np.zeros(len(state_mask))
 
@@ -86,17 +91,21 @@ def ii_mcts_agent(information_set_generator, mcts_config: IIGMCTSConfig, bot):
 
     state_mask, index_track = get_state_mask(mcts_config.state_to_value, information_set)
 
-    state_masked_policy, state_policy = get_policy_value_obs_node(root, state_mask, index_track, mcts_config)
+    state_masked_policy, state_policy = get_policy_value_obs_node(root, state_mask, index_track,
+                                                                  mcts_config.temperature,
+                                                                  mcts_config.use_reward_policy)
 
     guessed_state_id = np.argmax(state_policy)
     guessed_state = information_set[guessed_state_id]
 
+    guessed_node = [c for c in root.children if c.action == guessed_state_id][0]
+
     if mcts_config.use_reward_policy:
-        game_node_policy = compute_mcts_policy_reward(root.children[guessed_state_id],
+        game_node_policy = compute_mcts_policy_reward(guessed_node,
                                                       guessed_state.legal_actions_mask(),
                                                       temperature=mcts_config.temperature)
     else:
-        game_node_policy = compute_mcts_policy_new(root.children[guessed_state_id],
+        game_node_policy = compute_mcts_policy_new(guessed_node,
                                                    guessed_state.legal_actions_mask(),
                                                    temperature=mcts_config.temperature)
 
@@ -142,7 +151,10 @@ def play_one_game_alphaone(game, bots, mcts_config: IIGMCTSConfig, use_teacher_f
                 state_masked_policy = np.zeros(len(mcts_config.state_to_value))
                 state_masked_policy[mcts_config.state_to_value[state.__str__()]] = 1
 
-            trajectory_observation.states.append(TrajectoryState(state.observation_tensor(),
+            padded_history = information_set_generator.get_padded_observation_history(
+                mcts_config.n_previous_observations)
+
+            trajectory_observation.states.append(TrajectoryState(padded_history,
                                                                  state.current_player(),
                                                                  state_mask,
                                                                  action,

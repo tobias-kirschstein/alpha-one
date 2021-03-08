@@ -155,6 +155,9 @@ class AlphaOneTrainManager:
             train_game_samples = copy.deepcopy(train_game_samples_)
             valid_game_samples = copy.deepcopy(valid_game_samples_)
 
+            train_observation_samples = copy.deepcopy(train_observation_samples_)
+            valid_observation_samples = copy.deepcopy(valid_observation_samples_)
+
             del train_observation_samples_
             del valid_observation_samples_
             del train_game_samples_
@@ -227,9 +230,10 @@ class AlphaOneTrainManager:
             # Hack: store challenger model as checkpoint '-2' as Tensorflow models cannot be pickled (and thus
             # cannot be sent to the Ray workers). Instead, the ray workers have to load the models from disk
             self.checkpoint_manager.store_checkpoint(self.model_challenger, -2)
-            challenger_win_rate, trajectories, match_outcomes = self.evaluation_manager.compare_models(-2, -1)
+            challenger_win_rate, trajectories, match_outcomes, challenger_average_reward = self.evaluation_manager.compare_models(
+                -2, -1)
         else:
-            challenger_win_rate, trajectories, match_outcomes = self.evaluation_manager.compare_models(
+            challenger_win_rate, trajectories, match_outcomes, challenger_average_reward = self.evaluation_manager.compare_models(
                 self.model_challenger, self.model_current_best)
 
         challenger_policies = [state.policy
@@ -240,10 +244,16 @@ class AlphaOneTrainManager:
                                2: self.get_player_name_current_best()}
         match_outcomes = [match_outcome.with_renamed_players(player_name_mapping) for match_outcome in match_outcomes]
 
-        return challenger_win_rate, challenger_policies, match_outcomes
+        return challenger_win_rate, challenger_policies, match_outcomes, challenger_average_reward
 
-    def replace_model_with_challenger(self, challenger_win_rate: float, win_ratio_needed: float):
-        if challenger_win_rate > win_ratio_needed:
+    def replace_model_with_challenger(self, challenger_win_rate: float, win_ratio_needed: float,
+                                      challenger_average_reward: float, average_reward_needed: float):
+        if win_ratio_needed is not None:
+            supersedes = challenger_win_rate > win_ratio_needed
+        elif average_reward_needed is not None:
+            supersedes = challenger_average_reward > average_reward_needed
+
+        if supersedes:
             self.checkpoint_manager["observation_model_manager"].store_checkpoint(self.model_challenger[0],
                                                                                   self.get_player_name_challenger())
             self.checkpoint_manager["game_model_manager"].store_checkpoint(self.model_challenger[1],

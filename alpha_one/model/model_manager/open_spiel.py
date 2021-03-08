@@ -31,17 +31,16 @@ class OpenSpielCheckpointManager(CheckpointManager):
         return list_file_numbering(self.model_store_path, "checkpoint", ".index")
 
     def _build_model(self, config: OpenSpielModelConfig):
-
         if config.output_shape is not None:
             return model_lib.Model.build_model(
-            config.model_type,
-            config.input_shape,
-            config.output_shape,
-            nn_width=config.nn_width,
-            nn_depth=config.nn_depth,
-            weight_decay=config.weight_decay,
-            learning_rate=config.learning_rate,
-            path=self.model_store_path)
+                config.model_type,
+                config.input_shape,
+                config.output_shape,
+                nn_width=config.nn_width,
+                nn_depth=config.nn_depth,
+                weight_decay=config.weight_decay,
+                learning_rate=config.learning_rate,
+                path=self.model_store_path)
         return model_lib.Model.build_model(
             config.model_type,
             config.input_shape,

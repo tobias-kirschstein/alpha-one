@@ -41,7 +41,8 @@ batch_size = 128
 # Evaluation
 n_evaluations = 100                    # How many games should be played to measure which model is better
 evaluation_strategy = 'mcts'           # 'best_response'
-win_ratio_needed = 0.55                # Minimum win ratio that the challenger model needs in order to supersede the current best model
+win_ratio_needed = None #0.55                # Minimum win ratio that the challenger model needs in order to supersede the current best model
+average_reward_needed = 0.2            # Minimum average reward over current best model that the challenger model needs in order to supersede the current best model. Mutually exclusive with win_ratio_needed
 
 # MCTS config
 UCT_C = 3                              # Amount of exploration. Apparently, for games with higher absolute rewards (e.g., Poker) this should be higher
@@ -65,6 +66,10 @@ learning_rate = 5e-4
 # =========================================================================
 # END Settings
 # =========================================================================
+
+assert win_ratio_needed is None and average_reward_needed is not None \
+       or win_ratio_needed is not None and average_reward_needed is None, \
+    f"win_ratio_needed and average_reward_needed are mutually exclusive"
 
 model_saves_path = f'{MODEL_SAVES_DIR}/{game_name}'
 tensorboard_log_dir = f'{LOGS_DIR}/{game_name}'
@@ -105,6 +110,7 @@ hyperparameters = dict(
 
     n_evaluations=n_evaluations,
     win_ratio_needed=win_ratio_needed,
+    average_reward_needed=average_reward_needed,
 
     model_type=model_type,
     nn_width=nn_width,
@@ -204,7 +210,7 @@ if __name__ == '__main__':
         }, iteration)
 
         # 3 Evaluate trained model against current best model
-        challenger_win_rate, challenger_policies, match_outcomes = train_manager.evaluate_challenger_model()
+        challenger_win_rate, challenger_policies, match_outcomes, challenger_average_reward = train_manager.evaluate_challenger_model()
 
         player_name_current_best = train_manager.get_player_name_current_best()
         player_name_challenger = train_manager.get_player_name_challenger()
@@ -227,11 +233,19 @@ if __name__ == '__main__':
         print(
             f'  - Challenger won {int(round(challenger_win_rate * n_evaluations))}/{n_evaluations} games ({challenger_win_rate:.2%} win rate)')
         tensorboard.log_scalar("challenger_win_rate", challenger_win_rate, iteration)
+        tensorboard.log_scalar("challenger_average_reward", challenger_average_reward, iteration)
 
         # 4 Replace current best model with challenger model if it is better
-        train_manager.replace_model_with_challenger(challenger_win_rate, win_ratio_needed)
-        if challenger_win_rate > win_ratio_needed:
-            print(f"  - Model at iteration {iteration} supersedes previous model ({challenger_win_rate:.2%} win rate)")
+        train_manager.replace_model_with_challenger(challenger_win_rate, win_ratio_needed, challenger_average_reward,
+                                                    average_reward_needed)
+        if win_ratio_needed is not None:
+            if challenger_win_rate > win_ratio_needed:
+                print(
+                    f"  - Model at iteration {iteration} supersedes previous model ({challenger_win_rate:.2%} win rate)")
+        elif average_reward_needed is not None:
+            if challenger_average_reward > average_reward_needed:
+                print(
+                    f"  - Model at iteration {iteration} supersedes previous model ({challenger_average_reward:.2f} average reward)")
 
         challenger_entropy = calculate_entropy(challenger_policies)
         print(f"  - Challenger entropy: {challenger_entropy:0.3f}")

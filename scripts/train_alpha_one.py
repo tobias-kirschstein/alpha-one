@@ -38,7 +38,8 @@ batch_size = 32
 # Evaluation
 n_evaluations = 10  # How many games should be played to measure which model is better
 evaluation_strategy = 'mcts'  # 'best_response'
-win_ratio_needed = 0.55  # Minimum win ratio that the challenger model needs in order to supersede the current best model
+win_ratio_needed = None #0.55                # Minimum win ratio that the challenger model needs in order to supersede the current best model
+average_reward_needed = 0.2            # Minimum average reward over current best model that the challenger model needs in order to supersede the current best model. Mutually exclusive with win_ratio_needed
 
 # MCTS config
 UCT_C = 5  # Exploration constant. Should be higher if absolute rewards are higher in a game
@@ -73,6 +74,9 @@ learning_rate_game = 1e-5
 # END Settings
 # =========================================================================
 
+assert win_ratio_needed is None and average_reward_needed is not None \
+       or win_ratio_needed is not None and average_reward_needed is None, \
+    f"win_ratio_needed and average_reward_needed are mutually exclusive"
 
 # this is state to id
 state_to_value_dict = state_to_value(game_name)
@@ -261,7 +265,7 @@ if __name__ == '__main__':
             "value/valid": mean([loss.value for loss in valid_game_losses])
         }, iteration)
 
-        challenger_win_rate, challenger_policies, match_outcomes = train_manager.evaluate_challenger_model()
+        challenger_win_rate, challenger_policies, match_outcomes, challenger_average_reward = train_manager.evaluate_challenger_model()
 
         player_name_current_best = train_manager.get_player_name_current_best()
         player_name_challenger = train_manager.get_player_name_challenger()
@@ -297,11 +301,19 @@ if __name__ == '__main__':
         game_tensorboard.log_scalar("challenger_win_rate", challenger_win_rate, iteration)
 
         observation_tensorboard.log_scalar("challenger_win_rate", challenger_win_rate, iteration)
+        observation_tensorboard.log_scalar("challenger_average_reward", challenger_average_reward, iteration)
 
         # 3 Evaluate trained model against current best model
-        train_manager.replace_model_with_challenger(challenger_win_rate, win_ratio_needed)
-        if challenger_win_rate > win_ratio_needed:
-            print(f"  - Model at iteration {iteration} supersedes previous model ({challenger_win_rate:.2%} win rate)")
+        train_manager.replace_model_with_challenger(challenger_win_rate, win_ratio_needed, challenger_average_reward,
+                                                    average_reward_needed)
+        if win_ratio_needed is not None:
+            if challenger_win_rate > win_ratio_needed:
+                print(
+                    f"  - Model at iteration {iteration} supersedes previous model ({challenger_win_rate:.2%} win rate)")
+        elif average_reward_needed is not None:
+            if challenger_average_reward > average_reward_needed:
+                print(
+                    f"  - Model at iteration {iteration} supersedes previous model ({challenger_average_reward:.2f} average reward)")
 
         game_tensorboard.flush()
         observation_tensorboard.flush()
