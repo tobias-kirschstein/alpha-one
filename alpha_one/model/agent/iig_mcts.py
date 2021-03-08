@@ -21,6 +21,7 @@ class IIGMCTSAgent(Agent):
         self._use_reward_policy = use_reward_policy
         self._state_to_value_dict = state_to_value_dict
         self._last_guessed_state = None
+        self._last_state_policy = None
 
     @staticmethod
     def from_config(game, observation_model, game_model, mcts_config: IIGMCTSConfig):
@@ -47,6 +48,7 @@ class IIGMCTSAgent(Agent):
         guessed_state_id = np.argmax(state_policy)
         guessed_node = [c for c in root.children if c.action == guessed_state_id][0]
         self._last_guessed_state = information_set[guessed_state_id]
+        self._last_state_policy = state_policy
 
         if not self._temperature_drop or current_turn < self._temperature_drop:
             policy = policy_fn(guessed_node, information_set_generator.get_legal_actions_mask(),
@@ -60,6 +62,9 @@ class IIGMCTSAgent(Agent):
 
     def get_last_guessed_state(self):
         return self._last_guessed_state
+
+    def get_last_state_policy(self):
+        return self._last_state_policy
 
     def evaluate(self, state: pyspiel.State) -> float:
         root, _ = self._bot.mcts_search(state)

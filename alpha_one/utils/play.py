@@ -84,6 +84,9 @@ class VerboseGameMachine:
     def get_state(self):
         return self.state
 
+    def get_information_set_generator(self):
+        return self.information_set_generator
+
     def list_player_actions(self):
         print(f"Current Player: {self.state.current_player()}")
         print(f"Legal actions: ")

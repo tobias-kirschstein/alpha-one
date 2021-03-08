@@ -56,6 +56,7 @@ alpha_one = True
 omniscient_observer = True  # Whether the game model should have total information of the state it guessed
 use_reward_policy = True  # Whether the total rewards of nodes should be taken into account when constructing policies, or only the explore_counts
 use_teacher_forcing = True  # Whether the true game states should be used as label for the observation model, or the guessing policy of the IIG-MCTS
+n_previous_observations = 3            # How many previous observations the observation model should use
 
 # Model Hyperparameters
 model_type_obs = 'mlp'
@@ -91,7 +92,8 @@ mcts_config = IIGMCTSConfig(
     alpha_one=alpha_one,
     state_to_value=state_to_value_dict,
     use_reward_policy=use_reward_policy,
-    optimism=optimism)
+    optimism=optimism,
+    n_previous_observations=n_previous_observations)
 
 evaluation_mcts_config = IIGMCTSConfig(
     UCT_C,
@@ -103,7 +105,8 @@ evaluation_mcts_config = IIGMCTSConfig(
     alpha_one=alpha_one,
     state_to_value=state_to_value_dict,
     use_reward_policy=use_reward_policy,
-    optimism=optimism)
+    optimism=optimism,
+    n_previous_observations=n_previous_observations)
 
 hyperparameters = dict(
     game_name=game_name,
@@ -146,7 +149,8 @@ hyperparameters = dict(
     omniscient_observer=omniscient_observer,
     use_reward_policy=use_reward_policy,
     optimism=optimism,
-    use_teacher_forcing=use_teacher_forcing
+    use_teacher_forcing=use_teacher_forcing,
+    n_previous_observations=n_previous_observations
 )
 
 
@@ -165,7 +169,7 @@ if __name__ == '__main__':
     observation_model_config = OpenSpielModelConfig(
         game,
         model_type_obs,
-        game.observation_tensor_shape(),
+        [game.observation_tensor_shape()[0] * n_previous_observations],
         nn_width_obs,
         nn_depth_obs,
         weight_decay_obs,
@@ -302,6 +306,8 @@ if __name__ == '__main__':
 
         observation_tensorboard.log_scalar("challenger_win_rate", challenger_win_rate, iteration)
         observation_tensorboard.log_scalar("challenger_average_reward", challenger_average_reward, iteration)
+        game_tensorboard.log_scalar("challenger_win_rate", challenger_win_rate, iteration)
+        game_tensorboard.log_scalar("challenger_average_reward", challenger_average_reward, iteration)
 
         # 3 Evaluate trained model against current best model
         train_manager.replace_model_with_challenger(challenger_win_rate, win_ratio_needed, challenger_average_reward,
@@ -314,6 +320,9 @@ if __name__ == '__main__':
             if challenger_average_reward > average_reward_needed:
                 print(
                     f"  - Model at iteration {iteration} supersedes previous model ({challenger_average_reward:.2f} average reward)")
+
+        observation_tensorboard.log_scalar("best_model_generation", player_name_current_best, iteration)
+        game_tensorboard.log_scalar("best_model_generation", player_name_current_best, iteration)
 
         game_tensorboard.flush()
         observation_tensorboard.flush()
