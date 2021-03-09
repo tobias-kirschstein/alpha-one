@@ -25,7 +25,7 @@ class DirectInferenceAgent(Agent):
 
         _, policy = self._model.inference([observations], [legal_actions_mask])
         policy = policy[0]  # NN returns batch of predictions
-        policy[~np.array(legal_actions_mask, dtype=np.bool)] = float('-inf')
+        policy[~np.array(legal_actions_mask, dtype=np.bool)] = 0
 
         action = np.random.choice(len(policy), p=policy)
 

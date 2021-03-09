@@ -5,6 +5,7 @@ import numpy as np
 
 from alpha_one.game.information_set import InformationSetGenerator
 from alpha_one.game.observer import OmniscientObserver
+from alpha_one.game.trajectory import GameTrajectory
 
 
 class GameMachine:
@@ -13,9 +14,11 @@ class GameMachine:
         self.game = pyspiel.load_game(game) if isinstance(game, str) else game
         self.state = None
         self.information_set_generator = None
+        self._trajectory = None
         self.omniscient_observer = OmniscientObserver(self.game)
 
     def new_game(self):
+        self._trajectory = GameTrajectory(self.game)
         self.state = self.game.new_initial_state()
         self.information_set_generator = InformationSetGenerator(self.game)
         self._handle_chance_player()
@@ -36,6 +39,9 @@ class GameMachine:
     def get_rewards(self):
         assert self.is_finished(), f"Game has to be finished!"
         return self.state.returns()
+
+    def get_trajectory(self):
+        return self._trajectory
 
     def current_player(self):
         return self.state.current_player()
@@ -61,9 +67,13 @@ class GameMachine:
         return player_observation, omniscient_observation
 
     def play_action(self, action: int):
+        self._trajectory.append(self.state, action, None)
         self.state.apply_action(action)
         self.information_set_generator.register(self.state, action)
+
         self._handle_chance_player()
+        if self.is_finished():
+            self._trajectory.set_final_rewards(self.get_rewards())
 
     def is_finished(self):
         return self.state.is_terminal()

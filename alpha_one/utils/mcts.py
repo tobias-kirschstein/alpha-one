@@ -170,6 +170,8 @@ def compute_mcts_policy_reward(root, legal_actions_mask, temperature: float = 1.
         new_policy[policy.argmax(-1)] = 1
         policy = new_policy
     else:
+        assert temperature == int(temperature) or np.min(policy[legal_actions_mask]) >= 0, \
+            f"negative policy values {policy[legal_actions_mask]} cannot be used with non-integer temperatures {temperature}!"
         policy = policy ** (1 / temperature)
 
         if normalize:

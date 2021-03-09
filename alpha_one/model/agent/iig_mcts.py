@@ -60,6 +60,16 @@ class IIGMCTSAgent(Agent):
         action = np.random.choice(len(policy), p=policy)
         return action, policy
 
+    def predict_direct_state_policy(self, information_set_generator):
+
+        obs = [information_set_generator.get_padded_observation_history(self._bot.evaluator.n_previous_observations)]
+
+        information_set = information_set_generator.calculate_information_set()
+        state_mask, _ = get_state_mask(self._bot.state_to_value_dict, information_set)
+        value, policy = self._bot.evaluator._observation_model.inference(obs, [state_mask])
+
+        return value, policy
+
     def get_last_guessed_state(self):
         return self._last_guessed_state
 

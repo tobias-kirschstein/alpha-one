@@ -1,6 +1,7 @@
 from .rating import *
 from .elo import *
 from .true_skill import *
+from .average_reward import AverageRewardRatingSystem
 from .entropy import cross_entropy
 
 from statistics import mean

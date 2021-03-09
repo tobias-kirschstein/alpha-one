@@ -2,6 +2,7 @@ from alpha_one.game.trajectory import GameTrajectory
 from alpha_one.metrics import MatchOutcome
 from alpha_one.model.agent.base import Agent
 from alpha_one.utils.mcts import MCTSConfig, initialize_bot
+from alpha_one.utils.play import GameMachine
 
 
 class MCTSAgent:
@@ -18,18 +19,29 @@ class MCTSAgent:
 class AgentEvaluator:
 
     def __init__(self, game):
-        self.game = game
+        self._game = game
+        self._game_machine = GameMachine(game)
 
     def evaluate(self, agent1: Agent, agent2: Agent):
-        state = self.game.new_initial_state()
-        trajectory = GameTrajectory()
-        while not state.is_terminal():
-            current_player = state.current_player()
-            current_agent = agent1 if current_player == 0 else agent2
-            action, policy = current_agent.next_move(state)
-            trajectory.append(state, action, policy)
-            state.apply_action(action)
+        self._game_machine.new_game()
+        trajectory = GameTrajectory(self._game)
 
-        trajectory.set_final_rewards(state.returns())
-        match_outcome = MatchOutcome.win(0, 1) if trajectory.get_final_reward(0) == 1 else MatchOutcome.defeat(0, 1)
+        while not self._game_machine.is_finished():
+            current_player = self._game_machine.current_player()
+            current_agent = agent1 if current_player == 0 else agent2
+
+            if current_agent.is_information_set_agent():
+                action, policy = current_agent.next_move(self._game_machine.get_information_set_generator())
+            else:
+                action, policy = current_agent.next_move(self._game_machine.get_state())
+
+            trajectory.append(self._game_machine.get_state(), action, policy)
+            self._game_machine.play_action(action)
+
+        rewards = self._game_machine.get_rewards()
+        trajectory.set_final_rewards(rewards)
+        match_outcome = MatchOutcome.win(0, 1, rewards) \
+            if rewards[0] == 1 \
+            else MatchOutcome.defeat(0, 1, rewards)
+
         return match_outcome, trajectory

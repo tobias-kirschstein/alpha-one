@@ -25,21 +25,26 @@ class RatingSystem(ABC):
 
 class MatchOutcome:
 
-    def __init__(self, players, ranks):
+    def __init__(self, players, ranks, rewards=None):
         self.players = players
         self.ranks = ranks
+        self.rewards = rewards
 
     @staticmethod
-    def win(player1, player2):
-        return MatchOutcome([player1, player2], ranks=[1, 2])
+    def win(player1, player2, rewards=None):
+        if rewards is None:
+            rewards = [1, -1]
+        return MatchOutcome([player1, player2], ranks=[1, 2], rewards=rewards)
 
     @staticmethod
-    def defeat(player1, player2):
-        return MatchOutcome([player1, player2], ranks=[2, 1])
+    def defeat(player1, player2, rewards=None):
+        if rewards is None:
+            rewards = [-1, 1]
+        return MatchOutcome([player1, player2], ranks=[2, 1], rewards=rewards)
 
     @staticmethod
     def draw(player1, player2):
-        return MatchOutcome([player1, player2], ranks=[1, 1])
+        return MatchOutcome([player1, player2], ranks=[1, 1], rewards=[0, 0])
 
     def rename_player(self, old_player_name, new_player_name):
         self.players[self.players.index(old_player_name)] = new_player_name
