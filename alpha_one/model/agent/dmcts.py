@@ -3,7 +3,7 @@ import numpy as np
 from alpha_one.game.information_set import InformationSetGenerator
 from alpha_one.model.agent import MCTSAgent
 from alpha_one.model.agent.base import Agent
-from alpha_one.utils.determinized_mcts import initialize_bot, initialize_rollout_dmcts_bot
+from alpha_one.utils.determinized_mcts import initialize_bot, initialize_rollout_dmcts_bot, compute_mcts_policy_reward, compute_mcts_policy_new
 from alpha_one.utils.mcts import MCTSConfig
 
 
@@ -20,6 +20,7 @@ class DMCTSAgent(Agent):
         current_player = information_set_generator.current_player()
         information_set = information_set_generator.calculate_information_set(current_player)
         policy = np.zeros(information_set_generator.game.num_distinct_actions())
+        legal_actions_mask = np.array(information_set_generator.get_legal_actions_mask(), dtype=np.bool)
 
         if self._information_set_weights_fn is None:
             information_set_weights = [1.0 / len(information_set) for _ in range(len(information_set))]
@@ -35,15 +36,42 @@ class DMCTSAgent(Agent):
                 bot = initialize_rollout_dmcts_bot(information_set_generator.game, self._n_rollouts, self._mcts_config)
             else:
                 bot = initialize_bot(information_set_generator.game, self._model, self._mcts_config)
-            
-            mcts_agent = MCTSAgent(information_set_generator.game, bot, self._mcts_config.temperature,
-                                   temperature_drop=self._mcts_config.temperature_drop,
-                                   use_reward_policy=self._mcts_config.use_reward_policy)
-            _, state_policy = mcts_agent.next_move(s)
-            policy += w * state_policy
+        
+            root = bot.mcts_search(s)
 
-        policy_exp = np.exp(policy, where=information_set_generator.get_legal_actions_mask())
-        policy = policy_exp / np.sum(policy_exp)
+            if self._mcts_config.use_reward_policy:
+                policy_temp = compute_mcts_policy_reward(information_set_generator.game, root)
+            else:
+                policy_temp = compute_mcts_policy_new(information_set_generator.game, root)
+
+            policy = np.add(policy, w * policy_temp)
+    
+        if self._mcts_config.temperature == 0 or self._mcts_config.temperature is None:
+            # Return single-peaked policy with argmax
+            new_policy = np.zeros(len(legal_actions_mask))
+            # Explicitly set illegal actions to -inf as it can happen that policy is all 0
+            # (if no child was explored or all rewards are 0)
+            policy[~legal_actions_mask] = float('-inf')
+            new_policy[policy.argmax(-1)] = 1
+            policy = new_policy
+        else:
+            policy = policy ** (1 / self._mcts_config.temperature)
+            policy_exp = np.exp(policy, where=legal_actions_mask)
+            policy = policy_exp / np.sum(policy_exp)
+        #for w, s in zip(information_set_weights, information_set):
+        #    if self._model is None and self._n_rollouts is not None:
+        #        bot = initialize_rollout_dmcts_bot(information_set_generator.game, self._n_rollouts, self._mcts_config)
+        #    else:
+        #        bot = initialize_bot(information_set_generator.game, self._model, self._mcts_config)
+        #    
+        #    mcts_agent = MCTSAgent(information_set_generator.game, bot, self._mcts_config.temperature,
+        #                           temperature_drop=self._mcts_config.temperature_drop,
+        #                           use_reward_policy=self._mcts_config.use_reward_policy)
+        #    _, state_policy = mcts_agent.next_move(s)
+        #    policy += w * state_policy
+
+        #policy_exp = np.exp(policy, where=information_set_generator.get_legal_actions_mask())
+        #policy = policy_exp / np.sum(policy_exp)
 
         action = np.random.choice(len(policy), p=policy)
         return action, policy

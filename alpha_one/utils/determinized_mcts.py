@@ -69,10 +69,10 @@ def compute_mcts_policy_new(game, root):
 
 def compute_mcts_policy(game, model, state, information_set_generator, mcts_config: MCTSConfig, use_NN=True, n_rollouts=None):
 
-    current_player = state.current_player()
+    current_player = information_set_generator.current_player()
     information_set = information_set_generator.calculate_information_set(current_player)
     policy = np.zeros(game.num_distinct_actions())
-    legal_actions_mask = np.array(state.legal_actions_mask(), dtype=np.bool)
+    legal_actions_mask = np.array(information_set_generator.get_legal_actions_mask(), dtype=np.bool)
 
     for s in information_set:
         if use_NN:
