@@ -11,8 +11,28 @@ The repository structure is as follows:
  * `env.yaml` and `env.py`: Add any environment variables (such as paths to dataset files etc.) to the `env.yaml` file. To allow quick usage, load them in `env.py` and import them in your script via `from env import VARIABLE_NAME`
  * `.gitignore`: Add any files and folders that should not be versioned to the `.gitignore`. Typically, datasets, binary files and the like should be ignored by git
 
-# 2 Additional resources
-## 2.1 Trouble Shooting
+# 2 Setting Up
+* Clone the tum-adlr-ws20-9 repository to your local machine:
+`git clone https://gitlab.lrz.de/ge49muj/tum-adlr-ws20-9`
+* Clone the OpenSpiel repository to your local machine:
+`git clone https://github.com/deepmind/open_spiel`
+* Create a virtual environment running python version 3.8.5:
+`conda create -n adlr python=3.8.5`
+`conda activate adlr`
+* Install required packages in your virtual environment:
+`pip install -r requirements.txt`
+* Set your PYTHONPATH environment variable:
+`export PYTHONPATH=$PYTHONPATH:/<path_to_open_spiel>`
+`export PYTHONPATH=$PYTHONPATH:/<path_to_open_spiel>/build/python`
+
+# 3 Training and Evaluation of the models
+
+* Set "model_saves_dir", "logs_dir" and "plots_dir" in `env.yaml`.
+* Run scripts inside `scripts/`.
+* For evaluations, use `notebooks/evaluation` 
+
+# 4 Additional resources
+## 4.1 Trouble Shooting
 
 If you get:
 `pyglet.canvas.xlib.NoSuchDisplayException: Cannot connect to "None"`
@@ -20,18 +40,18 @@ If you get:
 because you use Gym inside Ubuntu WSL, then install Xming https://sourceforge.net/projects/xming/ on the Windows host and add "export DISPLAY=localhost:0.0" to your .bashrc file in Ubuntu
 
 
-## 2.2 Downloading ROMs for retro
+## 4.2 Downloading ROMs for retro
 
 Download zip file from http://www.atarimania.com/rom_collection_archive_atari_2600_roms.html
 Open Roms.rar > ROMS.rar and find Space Invaders (1980) XXXXXX
 Extract all matches (there are 5 of them) into your destin folder
 python -m retro.import . (don't forget the point)
 
-## 2.3 AlphaZero Implementation
+## 4.3 AlphaZero Implementation
 
 https://github.com/petosa/multiplayer-alphazero
 
-## 2.4 Tips on RL (taken from anywhere)
+## 4.4 Tips on RL (taken from anywhere)
  * most of the time for most gym environments three Linear layers is enough, maybe 64 ~ 500 neurons per level and I would suggest you use a pyramid like structure. Conv2d is only necessary for visual inputs.
 
  * Must use discount < 1, otherwise there is no garantee on convergence, because the convergence of magic like RL algorithms relies on a simple math principle, you must have learned it in your freshman math analysis class: converging series or alittle bit more advanced compaction
