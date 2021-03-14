@@ -12,17 +12,17 @@ The repository structure is as follows:
  * `.gitignore`: Add any files and folders that should not be versioned to the `.gitignore`. Typically, datasets, binary files and the like should be ignored by git
 
 # 2 Setting Up
-* Clone the tum-adlr-ws20-9 repository to your local machine:
+* Clone the tum-adlr-ws20-9 repository to your local machine:\
 `git clone https://gitlab.lrz.de/ge49muj/tum-adlr-ws20-9`
-* Clone the OpenSpiel repository to your local machine:
+* Clone the OpenSpiel repository to your local machine:\
 `git clone https://github.com/deepmind/open_spiel`
-* Create a virtual environment running python version 3.8.5:
-`conda create -n adlr python=3.8.5`
+* Create a virtual environment running python version 3.8.5:\
+`conda create -n adlr python=3.8.5`\
 `conda activate adlr`
-* Install required packages in your virtual environment:
+* Install required packages in your virtual environment:\
 `pip install -r requirements.txt`
-* Set your PYTHONPATH environment variable:
-`export PYTHONPATH=$PYTHONPATH:/<path_to_open_spiel>`
+* Set your PYTHONPATH environment variable:\
+`export PYTHONPATH=$PYTHONPATH:/<path_to_open_spiel>`\
 `export PYTHONPATH=$PYTHONPATH:/<path_to_open_spiel>/build/python`
 
 # 3 Training and Evaluation of the models
