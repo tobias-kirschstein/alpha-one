@@ -12,8 +12,8 @@ The repository structure is as follows:
  * `.gitignore`: Add any files and folders that should not be versioned to the `.gitignore`. Typically, datasets, binary files and the like should be ignored by git
 
 # 2 Setting Up
-* Clone the tum-adlr-ws20-9 repository to your local machine:\
-`git clone https://gitlab.lrz.de/ge49muj/tum-adlr-ws20-9`
+* Clone the `alpha-one` repository to your local machine:\
+`git clone git@github.com:tobias-kirschstein/alpha-one.git`
 * Clone the OpenSpiel repository to your local machine:\
 `git clone https://github.com/deepmind/open_spiel`
 * Create a virtual environment running python version 3.8.5:\
